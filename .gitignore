@@ -52,3 +52,7 @@ Mkfile.old
 dkms.conf
 /zad1/.idea
 /zad2/.idea
+.idea
+cmake-build-debug-mingw
+cmake-build-debug
+cmake-build-release-mingw
