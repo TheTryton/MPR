@@ -19,42 +19,65 @@ if __name__ == "__main__":
     df = df.rename(columns={
         "Problem Size": "size",
         "Schedule Type": "schedule",
+        "Thread Count": "thread_count",
         "Time Taken (Mean) [s]": "mean",
         "Time Taken STD [s]": "std"
     })
 
     schedule_types = df['schedule'].unique()
+    thread_counts = df['thread_count'].unique()
 
-    for schedule_type in schedule_types:
-        filtered = df[df['schedule'] == schedule_type]
-        plt.errorbar(
-            filtered['size'], filtered['mean'],
-            filtered['std'], label=schedule_type
-        )
-
-    plt.xscale('log')
-    plt.yscale('log')
-    plt.ylabel('time taken [s]')
-    plt.title('schedule')
-    plt.legend()
-    plt.show()
-
-    print(df.loc[df.groupby('size')['mean'].idxmin()])
+    for thread_count in thread_counts:
+        filtered_tc = df[df['thread_count'] == thread_count]
+        for schedule_type in schedule_types:
+            filtered = filtered_tc[filtered_tc['schedule'] == schedule_type]
+            plt.errorbar(
+                filtered['size'], filtered['mean'],
+                filtered['std'], label=schedule_type
+            )
+        plt.xscale('log')
+        plt.yscale('log')
+        plt.ylabel('time taken [s]')
+        plt.xlabel('problem size')
+        plt.title(f'Thread Count={thread_count}')
+        plt.legend()
+        plt.savefig(f'thread_count_{thread_count}.png', dpi=100)
+        plt.clf()
 
     sizes = df['size'].unique()
 
-    n = len(sizes)
-    r = np.arange(n)
+    for thread_count in thread_counts:
+        filtered_tc = df[df['thread_count'] == thread_count]
+        for size in sizes:
+            filtered = filtered_tc[filtered_tc['size'] == size]
+            plt.bar(
+                filtered['schedule'], filtered['mean'],
+                yerr=filtered['std']
+            )
+            plt.setp(plt.xticks()[1], rotation=90)
+            plt.tight_layout(rect=[0.1, 0.03, 1, 0.95])
+            plt.title(f'thread_count={thread_count} size={size}')
+            plt.yscale('log')
+            plt.ylabel("time taken [s]")
+            plt.savefig(f'thread_count_{thread_count}_size_{size}.png', dpi=100)
+            plt.clf()
 
-    for i, size in enumerate(sizes):
-        filtered = df[df['size'] == size]
-        plt.bar(
-            filtered['schedule'], filtered['mean'],
-            yerr=filtered['std']
-        )
-        plt.setp(plt.xticks()[1], rotation=90)
-        plt.tight_layout(rect=[0.05, 0.03, 1, 0.95])
-        plt.title(f'size={size}')
-        plt.yscale('log')
-        plt.ylabel("time taken [s]")
-        plt.show()
+    for size in sizes:
+        filtered_ps = df[df['size'] == size]
+        for schedule_type in schedule_types:
+            filtered_st = filtered_ps[filtered_ps['schedule'] == schedule_type]
+            single = filtered_st.loc[filtered_st['thread_count'].idxmin()]['mean']
+            rcp_single = 1 / single
+            thread_count = filtered_st['thread_count']
+            speedup = single / filtered_st['mean']
+            plt.plot(thread_count, speedup, marker='.')
+            plt.plot([1,2,4,6,8,12,16], [1,2,4,6,8,12,16], '--')
+            plt.title(f'problem_size={size} schedule_type={schedule_type}')
+            plt.xlabel("thread count")
+            plt.ylabel("speedup")
+            plt.xscale('log')
+            plt.savefig(f'problem_size_{size}_schedule_type_{schedule_type}.png', dpi=100)
+            plt.clf()
+
+
+

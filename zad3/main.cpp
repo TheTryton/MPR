@@ -82,63 +82,189 @@ public:
     constexpr parallel_for(schedule_t schedule) noexcept : schedule(schedule) {}
 private:
     template<typename SharedDataT, typename LoopF, typename InitF>
-    static void visit_schedule_t(const static_schedule& st_sch, size_t problem_size, SharedDataT& shared_data, InitF init, LoopF loop)
+    static void visit_schedule_t(const static_schedule& st_sch, std::optional<size_t> n_threads, size_t problem_size, SharedDataT& shared_data, InitF init, LoopF loop)
     {
-        if(st_sch.chunk_size)
+        if(n_threads)
         {
-#pragma omp parallel default(none) shared(shared_data, problem_size, init, loop, st_sch)
+            if(st_sch.chunk_size)
             {
-                auto init_data = init(omp_get_thread_num(), shared_data);
+#pragma omp parallel default(none) shared(shared_data, problem_size, init, loop, st_sch) num_threads(*n_threads)
+                {
+                    auto init_data = init(omp_get_thread_num(), shared_data);
 
 #pragma omp for schedule(static, *st_sch.chunk_size)
-                for(size_t i = 0; i < problem_size; i++) loop(i, init_data, shared_data);
+                    for(size_t i = 0; i < problem_size; i++) loop(i, init_data, shared_data);
+                }
             }
-        }
-        else
-        {
-#pragma omp parallel default(none) shared(shared_data, problem_size, init, loop)
+            else
             {
-                auto init_data = init(omp_get_thread_num(), shared_data);
+#pragma omp parallel default(none) shared(shared_data, problem_size, init, loop) num_threads(*n_threads)
+                {
+                    auto init_data = init(omp_get_thread_num(), shared_data);
 
 #pragma omp for schedule(static)
-                for(size_t i = 0; i < problem_size; i++) loop(i, init_data, shared_data);
+                    for(size_t i = 0; i < problem_size; i++) loop(i, init_data, shared_data);
+                }
+            }
+        }
+        else
+        {
+            if(st_sch.chunk_size)
+            {
+#pragma omp parallel default(none) shared(shared_data, problem_size, init, loop, st_sch)
+                {
+                    auto init_data = init(omp_get_thread_num(), shared_data);
+
+#pragma omp for schedule(static, *st_sch.chunk_size)
+                    for(size_t i = 0; i < problem_size; i++) loop(i, init_data, shared_data);
+                }
+            }
+            else
+            {
+#pragma omp parallel default(none) shared(shared_data, problem_size, init, loop)
+                {
+                    auto init_data = init(omp_get_thread_num(), shared_data);
+
+#pragma omp for schedule(static)
+                    for(size_t i = 0; i < problem_size; i++) loop(i, init_data, shared_data);
+                }
             }
         }
     }
     template<typename SharedDataT, typename LoopF, typename InitF>
-    static void visit_schedule_t(const dynamic_schedule& st_sch, size_t problem_size, SharedDataT& shared_data, InitF init, LoopF loop)
+    static void visit_schedule_t(const dynamic_schedule& st_sch, std::optional<size_t> n_threads, size_t problem_size, SharedDataT& shared_data, InitF init, LoopF loop)
     {
-        if(st_sch.chunk_size)
+        if(n_threads)
         {
-#pragma omp parallel default(none) shared(shared_data, problem_size, init, loop, st_sch)
+            if(st_sch.chunk_size)
             {
-                auto init_data = init(omp_get_thread_num(), shared_data);
+#pragma omp parallel default(none) shared(shared_data, problem_size, init, loop, st_sch) num_threads(*n_threads)
+                {
+                    auto init_data = init(omp_get_thread_num(), shared_data);
 
 #pragma omp for schedule(dynamic, *st_sch.chunk_size)
-                for(size_t i = 0; i < problem_size; i++) loop(i, init_data, shared_data);
+                    for(size_t i = 0; i < problem_size; i++) loop(i, init_data, shared_data);
+                }
             }
-        }
-        else
-        {
-#pragma omp parallel default(none) shared(shared_data, problem_size, init, loop)
+            else
             {
-                auto init_data = init(omp_get_thread_num(), shared_data);
+#pragma omp parallel default(none) shared(shared_data, problem_size, init, loop) num_threads(*n_threads)
+                {
+                    auto init_data = init(omp_get_thread_num(), shared_data);
 
 #pragma omp for schedule(dynamic)
-                for(size_t i = 0; i < problem_size; i++) loop(i, init_data, shared_data);
+                    for(size_t i = 0; i < problem_size; i++) loop(i, init_data, shared_data);
+                }
+            }
+        }
+        else
+        {
+            if (st_sch.chunk_size)
+            {
+#pragma omp parallel default(none) shared(shared_data, problem_size, init, loop, st_sch)
+                {
+                    auto init_data = init(omp_get_thread_num(), shared_data);
+
+#pragma omp for schedule(dynamic, *st_sch.chunk_size)
+                    for (size_t i = 0; i < problem_size; i++) loop(i, init_data, shared_data);
+                }
+            }
+            else
+            {
+#pragma omp parallel default(none) shared(shared_data, problem_size, init, loop)
+                {
+                    auto init_data = init(omp_get_thread_num(), shared_data);
+
+#pragma omp for schedule(dynamic)
+                    for (size_t i = 0; i < problem_size; i++) loop(i, init_data, shared_data);
+                }
             }
         }
     }
     template<typename SharedDataT, typename LoopF, typename InitF>
-    static void visit_schedule_t(const guided_schedule& st_sch, size_t problem_size, SharedDataT& shared_data, InitF init, LoopF loop)
+    static void visit_schedule_t(const guided_schedule& st_sch, std::optional<size_t> n_threads, size_t problem_size, SharedDataT& shared_data, InitF init, LoopF loop)
     {
-        if(st_sch.chunk_size)
+        if(n_threads)
         {
+            if(st_sch.chunk_size)
+            {
+#pragma omp parallel default(none) shared(shared_data, problem_size, init, loop, st_sch) num_threads(*n_threads)
+                {
+                    auto init_data = init(omp_get_thread_num(), shared_data);
+
+#pragma omp for schedule(guided, *st_sch.chunk_size)
+                    for(size_t i = 0; i < problem_size; i++) loop(i, init_data, shared_data);
+                }
+            }
+            else
+            {
+#pragma omp parallel default(none) shared(shared_data, problem_size, init, loop)  num_threads(*n_threads)
+                {
+                    auto init_data = init(omp_get_thread_num(), shared_data);
+
+#pragma omp for schedule(guided)
+                    for(size_t i = 0; i < problem_size; i++) loop(i, init_data, shared_data);
+                }
+            }
+        }
+        else
+        {
+            if(st_sch.chunk_size)
+            {
 #pragma omp parallel default(none) shared(shared_data, problem_size, init, loop, st_sch)
+                {
+                    auto init_data = init(omp_get_thread_num(), shared_data);
+
+#pragma omp for schedule(guided, *st_sch.chunk_size)
+                    for(size_t i = 0; i < problem_size; i++) loop(i, init_data, shared_data);
+                }
+            }
+            else
+            {
+#pragma omp parallel default(none) shared(shared_data, problem_size, init, loop)
+                {
+                    auto init_data = init(omp_get_thread_num(), shared_data);
+
+#pragma omp for schedule(guided)
+                    for(size_t i = 0; i < problem_size; i++) loop(i, init_data, shared_data);
+                }
+            }
+        }
+    }
+    template<typename SharedDataT, typename LoopF, typename InitF>
+    static void visit_schedule_t(const auto_schedule& st_sch, std::optional<size_t> n_threads, size_t problem_size, SharedDataT& shared_data, InitF init, LoopF loop)
+    {
+        if(n_threads)
+        {
+#pragma omp parallel default(none) shared(shared_data, problem_size, init, loop) num_threads(*n_threads)
             {
                 auto init_data = init(omp_get_thread_num(), shared_data);
 
-#pragma omp for schedule(guided, *st_sch.chunk_size)
+#pragma omp for schedule(auto)
+                for (size_t i = 0; i < problem_size; i++) loop(i, init_data, shared_data);
+            }
+        }
+        else
+        {
+#pragma omp parallel default(none) shared(shared_data, problem_size, init, loop)
+            {
+                auto init_data = init(omp_get_thread_num(), shared_data);
+
+#pragma omp for schedule(auto)
+                for (size_t i = 0; i < problem_size; i++) loop(i, init_data, shared_data);
+            }
+        }
+    }
+    template<typename SharedDataT, typename LoopF, typename InitF>
+    static void visit_schedule_t(const runtime_schedule& st_sch, std::optional<size_t> n_threads, size_t problem_size, SharedDataT& shared_data, InitF init, LoopF loop)
+    {
+        if(n_threads)
+        {
+#pragma omp parallel default(none) shared(shared_data, problem_size, init, loop) num_threads(*n_threads)
+            {
+                auto init_data = init(omp_get_thread_num(), shared_data);
+
+#pragma omp for schedule(runtime)
                 for(size_t i = 0; i < problem_size; i++) loop(i, init_data, shared_data);
             }
         }
@@ -148,43 +274,21 @@ private:
             {
                 auto init_data = init(omp_get_thread_num(), shared_data);
 
-#pragma omp for schedule(guided)
+#pragma omp for schedule(runtime)
                 for(size_t i = 0; i < problem_size; i++) loop(i, init_data, shared_data);
             }
-        }
-    }
-    template<typename SharedDataT, typename LoopF, typename InitF>
-    static void visit_schedule_t(const auto_schedule& st_sch, size_t problem_size, SharedDataT& shared_data, InitF init, LoopF loop)
-    {
-#pragma omp parallel default(none) shared(shared_data, problem_size, init, loop)
-        {
-            auto init_data = init(omp_get_thread_num(), shared_data);
-
-#pragma omp for schedule(auto)
-            for(size_t i = 0; i < problem_size; i++) loop(i, init_data, shared_data);
-        }
-    }
-    template<typename SharedDataT, typename LoopF, typename InitF>
-    static void visit_schedule_t(const runtime_schedule& st_sch, size_t problem_size, SharedDataT& shared_data, InitF init, LoopF loop)
-    {
-#pragma omp parallel default(none) shared(shared_data, problem_size, init, loop)
-        {
-            auto init_data = init(omp_get_thread_num(), shared_data);
-
-#pragma omp for schedule(runtime)
-            for(size_t i = 0; i < problem_size; i++) loop(i, init_data, shared_data);
         }
     }
 public:
     template<typename SharedDataT, typename LoopF, typename InitF>
-    void run(size_t problem_size, SharedDataT& shared_data, InitF init, LoopF loop) const noexcept
+    void run(size_t problem_size, SharedDataT& shared_data, InitF init, LoopF loop, std::optional<size_t> n_threads = std::nullopt) const noexcept
     {
-        std::visit([&, problem_size](auto&& sch_t) { visit_schedule_t(sch_t, problem_size, shared_data, init, loop); }, schedule);
+        std::visit([&, problem_size](auto&& sch_t) { visit_schedule_t(sch_t, n_threads, problem_size, shared_data, init, loop); }, schedule);
     }
     template<typename SharedDataT, typename LoopF, typename InitF>
-    void operator()(size_t problem_size, SharedDataT& shared_data, InitF init, LoopF loop) const noexcept
+    void operator()(size_t problem_size, SharedDataT& shared_data, InitF init, LoopF loop, std::optional<size_t> n_threads = std::nullopt) const noexcept
     {
-        run(problem_size, shared_data, init, loop);
+        run(problem_size, shared_data, init, loop, n_threads);
     }
 };
 
@@ -237,6 +341,20 @@ constexpr std::array<size_t, 14> problem_sizes
     1ull << 20,
     1ull << 22,
     1ull << 24,
+};
+
+constexpr std::array<size_t, 10> thread_counts
+{
+    1,
+    2,
+    4,
+    6,
+    8,
+    12,
+    16,
+    32,
+    64,
+    128,
 };
 
 template<typename F>
@@ -326,6 +444,7 @@ void run_all_crand()
 
     cout <<
          std::left << std::setw(20) << "Problem Size" << "," <<
+         std::left << std::setw(20) << "Thread Count" << "," <<
          std::left << std::setw(20) << "Schedule Type" << "," <<
          std::left << std::setw(20) << "Time Taken (Mean) [s]" <<
          std::left << std::setw(20) << "Time Taken STD [s]" <<
@@ -333,21 +452,25 @@ void run_all_crand()
 
     for(auto problem_size : problem_sizes)
     {
-        for(auto schedule_type : schedule_types)
+        for(auto thread_count : thread_counts)
         {
-            shared_data_crand<int> shd{
+            for(auto schedule_type : schedule_types)
+            {
+                shared_data_crand<int> shd{
                     .data = std::make_unique<int[]>(problem_size)
-            };
-            auto pf = parallel_for(schedule_type);
+                };
+                auto pf = parallel_for(schedule_type);
 
-            auto [mean, std] = time_it([&](){pf.run(problem_size, shd, init_crand<int>, loop_crand<int>);}, 100);
+                auto [mean, std] = time_it([&](){pf.run(problem_size, shd, init_crand<int>, loop_crand<int>, thread_count);}, 100);
 
-            cout <<
-                 std::left << std::setw(20) << problem_size << "," <<
-                 std::left << std::setw(20) << schedule_type << "," <<
-                 std::left << std::setw(20) << std::chrono::duration_cast<seconds_double_t>(mean).count() <<
-                 std::left << std::setw(20) << std::chrono::duration_cast<seconds_double_t>(std).count() <<
-                 endl;
+                cout <<
+                     std::left << std::setw(20) << problem_size << "," <<
+                     std::left << std::setw(20) << thread_count << "," <<
+                     std::left << std::setw(20) << schedule_type << "," <<
+                     std::left << std::setw(20) << std::chrono::duration_cast<seconds_double_t>(mean).count() <<
+                     std::left << std::setw(20) << std::chrono::duration_cast<seconds_double_t>(std).count() <<
+                     endl;
+            }
         }
     }
 }
@@ -362,6 +485,7 @@ void run_all_std_random()
 
     cout <<
         std::left << std::setw(20) << "Problem Size" << "," <<
+        std::left << std::setw(20) << "Thread Count" << "," <<
         std::left << std::setw(20) << "Schedule Type" << "," <<
         std::left << std::setw(20) << "Time Taken (Mean) [s]" << "," <<
         std::left << std::setw(20) << "Time Taken STD [s]" <<
@@ -369,22 +493,28 @@ void run_all_std_random()
 
     for(auto problem_size : problem_sizes)
     {
-        for(auto schedule_type : schedule_types)
+        for(auto thread_count : thread_counts)
         {
-            shared_data_std_random<int> shd{
-                .data = std::make_unique<int[]>(problem_size),
-                .rd = std::random_device()
-            };
-            auto pf = parallel_for(schedule_type);
+            for (auto schedule_type: schedule_types)
+            {
+                shared_data_std_random<int> shd{
+                    .data = std::make_unique<int[]>(problem_size),
+                    .rd = std::random_device()
+                };
+                auto pf = parallel_for(schedule_type);
 
-            auto [mean, std] = time_it([&](){pf.run(problem_size, shd, init_std_random<int>, loop_std_random<int>);}, 100);
+                auto[mean, std] = time_it([&]()
+                                          { pf.run(problem_size, shd, init_std_random<int>, loop_std_random<int>, thread_count); },
+                                          100);
 
-            cout <<
-                 std::left << std::setw(20) << problem_size << "," <<
-                 std::left << std::setw(20) << schedule_type << "," <<
-                 std::left << std::setw(20) << std::chrono::duration_cast<seconds_double_t>(mean).count() << "," <<
-                 std::left << std::setw(20) << std::chrono::duration_cast<seconds_double_t>(std).count() <<
-            endl;
+                cout <<
+                     std::left << std::setw(20) << problem_size << "," <<
+                     std::left << std::setw(20) << thread_count << "," <<
+                     std::left << std::setw(20) << schedule_type << "," <<
+                     std::left << std::setw(20) << std::chrono::duration_cast<seconds_double_t>(mean).count() << "," <<
+                     std::left << std::setw(20) << std::chrono::duration_cast<seconds_double_t>(std).count() <<
+                     endl;
+            }
         }
     }
 }
