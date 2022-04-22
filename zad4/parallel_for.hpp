@@ -167,7 +167,11 @@ static void visit_schedule_t(const auto_schedule& st_sch, std::optional<size_t> 
         {
             auto init_data = init(omp_get_thread_num(), shared_data);
 
+#ifdef _MSC_VER
+#pragma omp for schedule(runtime)
+#elif
 #pragma omp for schedule(auto)
+#endif
             for (size_t i = 0; i < problem_size; i++) loop(i, init_data, shared_data);
         }
     }
@@ -176,8 +180,11 @@ static void visit_schedule_t(const auto_schedule& st_sch, std::optional<size_t> 
 #pragma omp parallel default(none) shared(shared_data, problem_size, init, loop)
         {
             auto init_data = init(omp_get_thread_num(), shared_data);
-
+#ifdef _MSC_VER
+#pragma omp for schedule(runtime)
+#elif
 #pragma omp for schedule(auto)
+#endif
             for (size_t i = 0; i < problem_size; i++) loop(i, init_data, shared_data);
         }
     }

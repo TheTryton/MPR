@@ -3,21 +3,40 @@
 #include <bucket.hpp>
 #include <lockables.hpp>
 
-#include <range.hpp>
+#include <value_range.hpp>
 
-template<typename T, typename AllocT = std::allocator<T>, typename BT = fixed_bucket_t<T, AllocT>, typename BTAllocT = std::allocator<BT>>
+template<
+    typename ElementType,
+    typename ElementAllocator = std::allocator<ElementType>,
+    typename BucketType = fixed_size_bucket_t<ElementType, ElementAllocator>,
+    typename BucketAllocator = std::allocator<BucketType>
+    >
 class buckets_t
 {
+public:
+    using element_type = ElementType;
+    using element_allocator_t = ElementAllocator;
+    using bucket_type = BucketType;
+    using bucket_allocator_t = BucketAllocator;
+public:
+    using value_type = bucket_type;
+    using reference = value_type&;
+    using const_reference = const value_type&;
+
+    using iterator = typename fixed_size_dynamic_array<bucket_type, bucket_allocator_t>::iterator;
+    using const_iterator = typename fixed_size_dynamic_array<bucket_type, bucket_allocator_t>::const_iterator;
+
+    using size_type = typename fixed_size_dynamic_array<bucket_type, bucket_allocator_t>::size_type;
 private:
-    fixed_size_dynamic_array<BT, BTAllocT> _buckets = {};
-    range<T> _values_range = {};
+    fixed_size_dynamic_array<bucket_type, bucket_allocator_t> _buckets = {};
+    value_range<element_type> _values_range = {};
 public:
     constexpr buckets_t() noexcept = default;
     buckets_t(
-        size_t bucket_count, size_t bucket_size, const range<T>& inserted_values_range,
-        AllocT alloc = {}, BTAllocT bt_alloc = {}
+        size_type bucket_count, size_type bucket_size, const value_range<element_type>& inserted_values_range,
+        element_allocator_t element_allocator = {}, bucket_allocator_t bucket_allocator = {}
     )
-        : _buckets(bucket_count, BT{bucket_size, std::move(alloc)}, std::move(bt_alloc))
+        : _buckets(bucket_count, bucket_type{bucket_size, std::move(element_allocator)}, std::move(bucket_allocator))
         , _values_range(inserted_values_range)
     {}
     buckets_t(const buckets_t& other) = default;
@@ -26,54 +45,72 @@ public:
     buckets_t& operator=(const buckets_t& other) = default;
     buckets_t& operator=(buckets_t&& other) noexcept = default;
 public:
-    [[nodiscard]] constexpr size_t size() const noexcept { return std::size(_buckets); }
-    [[nodiscard]] constexpr size_t total_size() const noexcept
+    [[nodiscard]] constexpr size_type size() const noexcept { return std::size(_buckets); }
+    [[nodiscard]] constexpr size_type total_size() const noexcept
     {
-        return std::accumulate(std::begin(_buckets), std::end(_buckets), size_t(0), [](auto a, auto b){ return a + std::size(b);});
+        return std::accumulate(std::begin(_buckets), std::end(_buckets), size_type(0), [](auto a, auto b){ return a + std::size(b);});
     }
 public:
-    constexpr BT* begin()  noexcept { return std::begin(_buckets); }
-    constexpr const BT* begin() const noexcept { return std::begin(_buckets); }
-    constexpr BT* end() noexcept { return std::end(_buckets); }
-    constexpr const BT* end() const noexcept { return std::end(_buckets); }
+    constexpr iterator begin()  noexcept { return std::begin(_buckets); }
+    constexpr const_iterator begin() const noexcept { return std::begin(_buckets); }
+    constexpr iterator end() noexcept { return std::end(_buckets); }
+    constexpr const_iterator end() const noexcept { return std::end(_buckets); }
 public:
-    constexpr BT& at(size_t bucket_index) noexcept { return _buckets[bucket_index]; }
-    constexpr const BT& at(size_t bucket_index) const noexcept { return _buckets[bucket_index]; }
+    constexpr reference at(size_type bucket_index) noexcept { return _buckets[bucket_index]; }
+    constexpr const_reference at(size_type bucket_index) const noexcept { return _buckets[bucket_index]; }
 
-    constexpr BT& operator[](size_t bucket_index) noexcept { return at(bucket_index); }
-    constexpr const BT& operator[](size_t bucket_index) const noexcept { return at(bucket_index); }
+    constexpr reference operator[](size_type bucket_index) noexcept { return at(bucket_index); }
+    constexpr const_reference operator[](size_type bucket_index) const noexcept { return at(bucket_index); }
 private:
-    constexpr size_t select_bucket(const T& value) const noexcept
+    constexpr size_type select_bucket(const element_type& value) const noexcept
     {
         assert(can_accept_value(value));
-        auto coeff01 = (value - _values_range.low) / _values_range.length();
-        return static_cast<size_t>(std::round(coeff01 * (size() - 1)));
+        auto coefficent01 = (value - _values_range.low) / _values_range.length();
+        return static_cast<size_t>(std::round(coefficent01 * (size() - 1)));
     }
 public:
-    constexpr bool can_accept_value(const T& value) const noexcept
+    constexpr bool can_accept_value(const element_type& value) const noexcept
     {
         return _values_range.contains(value);
     }
-    constexpr range<T> bucket_value_range(size_t bucket_index) const noexcept
+    constexpr value_range<element_type> bucket_value_range(size_type bucket_index) const noexcept
     {
         return _values_range.split_index(size(), bucket_index);
     }
 public:
-    void insert(const T& value) noexcept
+    void insert(const element_type& value) noexcept
     {
         _buckets[select_bucket(value)].insert(value);
     }
-    void insert(T&& value) noexcept
+    void insert(element_type&& value) noexcept
     {
         _buckets[select_bucket(value)].insert(std::move(value));
     }
 public:
-    template<typename TO, typename AllocTO, typename BTO, typename BTAllocTO>
-    friend std::ostream& operator<<(std::ostream& o, const buckets_t<TO, AllocTO, BTO, BTAllocTO>& buckets);
+    template<
+        typename ElementTypeO,
+        typename ElementAllocatorO,
+        typename BucketTypeO,
+        typename BucketAllocatorO
+        >
+    friend std::ostream& operator<<(
+        std::ostream& o,
+        const buckets_t<
+            ElementTypeO, ElementAllocatorO,
+            BucketTypeO, BucketAllocatorO>& buckets
+        );
 };
 
-template<typename T, typename AllocT, typename BT, typename BTAllocT>
-std::ostream& operator<<(std::ostream& o, const buckets_t<T, AllocT, BT, BTAllocT>& buckets)
+template<
+    typename ElementType,
+    typename ElementAllocator,
+    typename BucketType,
+    typename BucketAllocator
+    >
+std::ostream& operator<<(
+    std::ostream& o,
+    const buckets_t<ElementType, ElementAllocator, BucketType, BucketAllocator>& buckets
+    )
 {
     size_t i = 0;
     for(const auto& bucket : buckets)
@@ -83,17 +120,46 @@ std::ostream& operator<<(std::ostream& o, const buckets_t<T, AllocT, BT, BTAlloc
     return o;
 }
 
-template<typename T, typename LockT = std::mutex, typename AllocT = std::allocator<T>, typename BT = fixed_bucket_t<T, AllocT>, typename BTAllocT = std::allocator<BT>>
+template<typename BucketType, size_t BucketAlignment>
+class alignas(BucketAlignment) aligned_bucket_t
+    : public BucketType
+{
+    using BucketType::BucketType;
+};
+
+template<
+    typename ElementType,
+    typename ElementAllocator = std::allocator<ElementType>,
+    typename BaseBucketType = fixed_size_bucket_t<ElementType, ElementAllocator>,
+    size_t BucketAlignmentOverride = std::alignment_of_v<BaseBucketType>,
+    typename AlignedBucketAllocator = std::allocator<aligned_bucket_t<BaseBucketType, BucketAlignmentOverride>>,
+    typename LockType = std::mutex
+    >
 class thread_safe_buckets_t
 {
+public:
+    using element_type = ElementType;
+    using element_allocator_t = ElementAllocator;
+    using bucket_type = aligned_bucket_t<BaseBucketType, BucketAlignmentOverride>;
+    using bucket_allocator_t = AlignedBucketAllocator;
+    using lock_type = LockType;
+public:
+    using value_type = bucket_type;
+    using reference = value_type&;
+    using const_reference = const value_type&;
+
+    using iterator = typename bucket_type::iterator;
+    using const_iterator = typename bucket_type::const_iterator;
+
+    using size_type = typename bucket_type::size_type;
 private:
-    buckets_t<T, AllocT, BT, BTAllocT> _buckets = {};
-    LockT _lock = {};
+    buckets_t<element_type, element_allocator_t, bucket_type, bucket_allocator_t> _buckets = {};
+    lock_type _lock = {};
 public:
     constexpr thread_safe_buckets_t() noexcept = default;
     thread_safe_buckets_t(
-        size_t bucket_count, size_t bucket_size, const range<T>& inserted_values_range,
-        AllocT alloc = {}, BTAllocT bt_alloc = {}
+        size_type bucket_count, size_type bucket_size, const value_range<element_type>& inserted_values_range,
+        element_allocator_t alloc = {}, bucket_allocator_t bt_alloc = {}
     )
         : _buckets(bucket_count, bucket_size, inserted_values_range, std::move(alloc), std::move(bt_alloc))
     { }
@@ -117,52 +183,78 @@ public:
         return *this;
     }
 public:
-    [[nodiscard]] constexpr size_t size() const noexcept { return std::size(_buckets); }
-    [[nodiscard]] constexpr size_t total_size() const noexcept
+    [[nodiscard]] constexpr size_type size() const noexcept { return std::size(_buckets); }
+    [[nodiscard]] constexpr size_type total_size() const noexcept
     {
-        return std::accumulate(std::begin(_buckets), std::end(_buckets), size_t(0), [](auto a, auto b){ return a + std::size(b);});
+        return std::accumulate(std::begin(_buckets), std::end(_buckets), size_type(0), [](auto a, auto b){ return a + std::size(b);});
     }
 public:
-    constexpr BT* begin()  noexcept { return std::begin(_buckets); }
-    constexpr const BT* begin() const noexcept { return std::begin(_buckets); }
-    constexpr BT* end() noexcept { return std::end(_buckets); }
-    constexpr const BT* end() const noexcept { return std::end(_buckets); }
+    constexpr iterator begin()  noexcept { return std::begin(_buckets); }
+    constexpr const_iterator begin() const noexcept { return std::begin(_buckets); }
+    constexpr iterator end() noexcept { return std::end(_buckets); }
+    constexpr const_iterator end() const noexcept { return std::end(_buckets); }
 public:
-    LockT& lock() noexcept { return _lock; }
-    const LockT& lock() const noexcept { return _lock; }
+    lock_type& lock() noexcept { return _lock; }
+    const lock_type& lock() const noexcept { return _lock; }
 public:
-    constexpr BT& at(size_t bucket_index) noexcept { return _buckets[bucket_index]; }
-    constexpr const BT& at(size_t bucket_index) const noexcept { return _buckets[bucket_index]; }
+    constexpr reference at(size_type bucket_index) noexcept { return _buckets[bucket_index]; }
+    constexpr const_reference at(size_type bucket_index) const noexcept { return _buckets[bucket_index]; }
 
-    constexpr BT& operator[](size_t bucket_index) noexcept { return at(bucket_index); }
-    constexpr const BT& operator[](size_t bucket_index) const noexcept { return at(bucket_index); }
+    constexpr reference operator[](size_type bucket_index) noexcept { return at(bucket_index); }
+    constexpr const_reference operator[](size_type bucket_index) const noexcept { return at(bucket_index); }
 public:
-    constexpr bool can_accept_value(const T& value) const noexcept
+    constexpr bool can_accept_value(const element_type& value) const noexcept
     {
         return _buckets.can_accept_value(value);
     }
-    constexpr range<T> bucket_value_range(size_t bucket_index) const noexcept
+    constexpr value_range<element_type> bucket_value_range(size_type bucket_index) const noexcept
     {
         return _buckets.bucket_value_range(bucket_index);
     }
 public:
-    void insert(const T& value) noexcept
+    void insert(const element_type& value) noexcept
     {
         std::lock_guard{_lock};
         _buckets[select_bucket(value)].insert(value);
     }
-    void insert(T&& value) noexcept
+    void insert(element_type&& value) noexcept
     {
         std::lock_guard{_lock};
         _buckets[select_bucket(value)].insert(std::move(value));
     }
 public:
-    template<typename TO, typename LockTO, typename AllocTO, typename BTO, typename BTAllocTO>
-    friend std::ostream& operator<<(std::ostream& o, const thread_safe_buckets_t<TO, LockTO, AllocTO, BTO, BTAllocTO>& buckets);
+    template<
+        typename ElementTypeO,
+        typename ElementAllocatorO,
+        typename BaseBucketTypeO,
+        size_t BucketAlignmentOverrideO,
+        typename AlignedBucketAllocatorO,
+        typename LockTypeO
+            >
+    friend std::ostream& operator<<(
+        std::ostream& o,
+        const thread_safe_buckets_t<
+            ElementTypeO, ElementAllocatorO,
+            BaseBucketTypeO, BucketAlignmentOverrideO,
+            AlignedBucketAllocatorO, LockTypeO>& buckets
+    );
 };
 
-template<typename T, typename LockT, typename AllocT, typename BT, typename BTAllocT>
-std::ostream& operator<<(std::ostream& o, const thread_safe_buckets_t<T, LockT, AllocT, BT, BTAllocT>& buckets)
+template<
+    typename ElementType,
+    typename ElementAllocator,
+    typename BaseBucketType,
+    size_t BucketAlignmentOverride,
+    typename AlignedBucketAllocator,
+    typename LockType
+    >
+std::ostream& operator<<(
+    std::ostream& o,
+    const thread_safe_buckets_t<
+        ElementType, ElementAllocator,
+        BaseBucketType, BucketAlignmentOverride,
+        AlignedBucketAllocator, LockType>& buckets
+    )
 {
     size_t i = 0;
     for(const auto& bucket : buckets)

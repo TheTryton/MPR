@@ -4,6 +4,7 @@ project(lab3)
 
 find_package(OpenMP) 
 
+
 add_executable(lab3
         parallel_for.hpp
         parallel_for.cpp
@@ -11,7 +12,7 @@ add_executable(lab3
         schedule.hpp
         schedule.cpp
 
-        range.hpp
+        value_range.hpp
         fixed_size_dynamic_array.hpp
 
         bucket.hpp
@@ -28,6 +29,11 @@ add_executable(lab3
         )
 target_link_libraries(lab3 PRIVATE OpenMP::OpenMP_CXX)
 target_include_directories(lab3 PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+
+if (CMAKE_GENERATOR MATCHES "Visual Studio")
+    target_compile_options(lab3 PRIVATE "-openmp:llvm")
+endif()
+
 
 set_target_properties(lab3
         PROPERTIES

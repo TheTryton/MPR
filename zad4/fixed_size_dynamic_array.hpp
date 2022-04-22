@@ -2,68 +2,92 @@
 
 #include <memory>
 #include <ostream>
+#include <iostream>
 
 #include <assert.h>
 
-template<typename T, typename AllocT = std::allocator<T>>
+template<
+    typename ElementType,
+    typename ElementAllocator = std::allocator<ElementType>
+    >
 class fixed_size_dynamic_array
 {
+public:
+    using element_allocator_t = ElementAllocator;
+public:
+    using value_type = ElementType;
+    using reference = value_type&;
+    using const_reference = const value_type&;
+    using pointer = value_type*;
+    using const_pointer = const value_type*;
+
+    using iterator = pointer;
+    using const_iterator = const_pointer;
+
+    using size_type = std::size_t;
 private:
     struct deleter_t
     {
-        AllocT alloc = {};
-        size_t size = {};
-        void operator()(T* ptr)
+        ElementAllocator alloc = {};
+        size_type size = {};
+        void operator()(pointer ptr)
         {
             if(ptr == nullptr)
                 return;
+            std::default_delete<value_type>();
+            std::cout << "Deallocating " << ptr << std::endl;
             std::destroy_n(ptr, size);
-            std::allocator_traits<AllocT>::deallocate(alloc, ptr, size);
+            std::cout << "Deallocated " << ptr << std::endl;
+            std::allocator_traits<element_allocator_t>::deallocate(alloc, ptr, size);
         }
     };
 private:
-    std::unique_ptr<T[], deleter_t> _data = nullptr;
-    size_t _size = 0;
+    std::unique_ptr<value_type[], deleter_t> _data = nullptr;
+    size_type _size = 0;
 private:
-    constexpr static std::unique_ptr<T[], deleter_t> prepare_data(size_t size, AllocT alloc, const T& init)
+    constexpr static std::unique_ptr<value_type[], deleter_t> prepare_data(size_type size, element_allocator_t alloc, const_reference init)
     {
         if(size == 0)
             return nullptr;
 
-        auto memory = std::allocator_traits<AllocT>::allocate(alloc, size);
+        auto memory = std::allocator_traits<element_allocator_t>::allocate(alloc, size);
+        std::cout << "Size=" << size << std::endl;
         std::uninitialized_fill_n(memory, size, init);
 
-        return std::unique_ptr<T[], deleter_t>(memory, deleter_t{ .alloc=alloc, .size = size });
+        return std::unique_ptr<value_type[], deleter_t>(memory, deleter_t{ .alloc=alloc, .size = size });
     }
-    constexpr static std::unique_ptr<T[], deleter_t> prepare_data(size_t size, AllocT alloc)
+    constexpr static std::unique_ptr<value_type[], deleter_t> prepare_data(size_type size, element_allocator_t alloc)
     {
         if(size == 0)
             return nullptr;
 
-        auto memory = std::allocator_traits<AllocT>::allocate(alloc, size);
-        if constexpr(!std::is_trivially_default_constructible_v<T> && std::is_default_constructible_v<T>)
-            std::uninitialized_fill_n(memory, size, T{});
+        auto memory = std::allocator_traits<element_allocator_t>::allocate(alloc, size);
+        std::cout << "Size=" << size << std::endl;
+        if constexpr(!std::is_trivially_default_constructible_v<value_type> && std::is_default_constructible_v<value_type>)
+            std::uninitialized_fill_n(memory, size, value_type{});
 
-        return std::unique_ptr<T[], deleter_t>(memory, deleter_t{ .alloc=alloc, .size = size });
+        return std::unique_ptr<value_type[], deleter_t>(memory, deleter_t{ .alloc=alloc, .size = size });
     }
-    constexpr static std::unique_ptr<T[], deleter_t> prepare_data(size_t size, AllocT alloc, const T* init_b, const T* init_e)
+    template<typename It>
+    constexpr static std::unique_ptr<value_type[], deleter_t> prepare_data(size_type size, element_allocator_t alloc, It init_b, It init_e)
     {
         if(size == 0)
             return nullptr;
 
-        auto memory = std::allocator_traits<AllocT>::allocate(alloc, size);
-        std::uninitialized_copy_n(init_b, size, memory);
+        std::cout << "Size==init_e - init_b? " << (std::distance(init_b, init_e) == size) << std::endl;
+        auto memory = std::allocator_traits<element_allocator_t>::allocate(alloc, size);
+        std::uninitialized_copy(init_b, init_e, memory);
 
-        return std::unique_ptr<T[], deleter_t>(memory, deleter_t{ .alloc=alloc, .size = size });
+        return std::unique_ptr<value_type[], deleter_t>(memory, deleter_t{ .alloc=alloc, .size = size });
     }
 public:
     constexpr fixed_size_dynamic_array() noexcept = default;
-    explicit fixed_size_dynamic_array(size_t size, AllocT alloc = {})
+    explicit fixed_size_dynamic_array(size_type size, element_allocator_t alloc = {})
         : _data(prepare_data(size, alloc))
         , _size(size)
     {}
 
-    fixed_size_dynamic_array(size_t size, const T& init, AllocT alloc = {})
+    fixed_size_dynamic_array(size_type size, const_reference init, element_allocator_t alloc = {})
         : _data(prepare_data(size, alloc, init))
         , _size(size)
     {}
@@ -92,29 +116,41 @@ public:
         return *this;
     }
 public:
-    [[nodiscard]] constexpr size_t size() const noexcept { return _size; }
+    [[nodiscard]] constexpr size_type size() const noexcept { return _size; }
 
-    constexpr T* data() noexcept { return _data.get(); }
-    constexpr const T* data() const noexcept { return _data.get(); }
+    constexpr pointer data() noexcept { return _data.get(); }
+    constexpr const_pointer data() const noexcept { return _data.get(); }
 
-    constexpr T* begin() noexcept { return data(); }
-    constexpr const T* begin() const noexcept { return data(); }
+    constexpr pointer begin() noexcept { return data(); }
+    constexpr const_pointer begin() const noexcept { return data(); }
 
-    constexpr T* end() noexcept { return data() + size(); }
-    constexpr const T* end() const noexcept { return data() + size(); }
+    constexpr pointer end() noexcept { return data() + size(); }
+    constexpr const_pointer end() const noexcept { return data() + size(); }
 public:
-    constexpr T& at(size_t index) noexcept { assert(index < _size); return _data[index]; }
-    constexpr const T& at(size_t index) const noexcept { assert(index < _size); return _data[index]; }
+    constexpr reference at(size_type index) noexcept { assert(index < _size); return _data[index]; }
+    constexpr const_reference at(size_type index) const noexcept { assert(index < _size); return _data[index]; }
 
-    constexpr T& operator[](size_t index) noexcept { return at(index); }
-    constexpr const T& operator[](size_t index) const noexcept { return at(index); }
+    constexpr reference operator[](size_type index) noexcept { return at(index); }
+    constexpr const_reference operator[](size_type index) const noexcept { return at(index); }
 public:
-    template<typename TO, typename AllocTO>
-    friend std::ostream& operator<<(std::ostream& o, const fixed_size_dynamic_array<TO, AllocTO>& farr);
+    template<
+        typename ElementTypeO,
+        typename ElementAllocatorO
+        >
+    friend std::ostream& operator<<(
+        std::ostream& o,
+        const fixed_size_dynamic_array<ElementTypeO, ElementAllocatorO>& farr
+        );
 };
 
-template<typename T, typename AllocT>
-std::ostream& operator<<(std::ostream& o, const fixed_size_dynamic_array<T, AllocT>& farr)
+template<
+    typename ElementType,
+    typename ElementAllocator
+    >
+std::ostream& operator<<(
+    std::ostream& o,
+    const fixed_size_dynamic_array<ElementType, ElementAllocator>& farr
+    )
 {
     o << '[';
     for(const auto& v : farr) o << v << ", ";

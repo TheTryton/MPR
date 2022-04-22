@@ -3,14 +3,14 @@
 #include <assert.h>
 
 template<typename T>
-struct range
+struct value_range
 {
     T low;
     T high;
 
     [[nodiscard]] T length() const noexcept { return high - low; }
     [[nodiscard]] bool contains(const T& v) const noexcept { return v >= low && v < high; }
-    [[nodiscard]] range<T> split_index(size_t count, size_t index) const noexcept
+    [[nodiscard]] value_range<T> split_index(size_t count, size_t index) const noexcept
     {
         assert(index < count);
         auto base = low;

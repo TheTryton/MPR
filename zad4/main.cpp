@@ -19,7 +19,7 @@ struct shared_data_std_random
 {
     fixed_size_dynamic_array<T, AllocT>& data;
     std::random_device rd;
-    range<T> value_range;
+    value_range<T> value_range;
 };
 
 template<typename T>
@@ -50,7 +50,7 @@ fixed_size_dynamic_array<T, AllocT> allocate_data(size_t size, AllocT alloc = {}
 template<typename T, typename AllocT>
 void generate_data(
     fixed_size_dynamic_array<T, AllocT>& data,
-    range<T> value_range,
+    value_range<T> value_range,
     schedule_t schedule_type,
     std::optional<size_t> thread_count = std::nullopt
     )
@@ -251,11 +251,11 @@ int main(int argc, char* argv[])
 {
     omp_set_num_threads(16);
 
-    auto value_range = range<float>{0.0f, 10.0f};
+    auto v_range = value_range<float>{0.0f, 10.0f};
     auto schedule_type = guided_schedule{.chunk_size=32};
 
-    auto data = allocate_data<float>(100);
-    generate_data(data, value_range, schedule_type, 4);
+    auto data = allocate_data<float>(20);
+    generate_data(data, v_range, schedule_type, 4);
     std::cout << data << std::endl;
     /*bucket_sort()
     bucket_sort_v1(
@@ -268,7 +268,7 @@ int main(int argc, char* argv[])
         1,
         32
     );*/
-    bucket_sort(std::begin(data), std::end(data), value_range);
+    bucket_sort(std::begin(data), std::end(data), v_range);
 
     std::cout << std::is_sorted(std::begin(data), std::end(data)) << std::endl;
     std::cout << data << std::endl;

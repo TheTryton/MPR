@@ -1,7 +1,7 @@
 #pragma once
 
 #include <schedule.hpp>
-#include <range.hpp>
+#include <value_range.hpp>
 #include <array>
 
 constexpr std::array<schedule_t, 29> schedule_types
@@ -69,15 +69,15 @@ constexpr std::array<size_t, 10> thread_counts
     128,
 };
 
-constexpr std::array<range<float>, 7> value_ranges
+constexpr std::array<value_range<float>, 7> value_ranges
 {
-    range<float>{0.0f, 1.0f},
-    range<float>{0.0f, 10.0f},
-    range<float>{0.0f, 100.0f},
-    range<float>{0.0f, 1000.0f},
-    range<float>{1.0f, 10.0f},
-    range<float>{10.0f, 100.0f},
-    range<float>{100.0f, 1000.0f},
+    value_range<float>{0.0f, 1.0f},
+    value_range<float>{0.0f, 10.0f},
+    value_range<float>{0.0f, 100.0f},
+    value_range<float>{0.0f, 1000.0f},
+    value_range<float>{1.0f, 10.0f},
+    value_range<float>{10.0f, 100.0f},
+    value_range<float>{100.0f, 1000.0f},
 };
 
 constexpr std::array<size_t, 5> bucket_counts
