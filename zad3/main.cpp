@@ -9,6 +9,8 @@
 #include <variant>
 #include <iomanip>
 #include <string>
+#include <execution>
+#include <algorithm>
 
 using std::size_t;
 using std::unique_ptr;
@@ -221,7 +223,7 @@ constexpr std::array<schedule_t, 29> schedule_types
     runtime_schedule{},
 };
 
-constexpr std::array<size_t, 14> problem_sizes
+constexpr std::array<size_t, 12> problem_sizes
 {
     1ull << 7,
     1ull << 8,
@@ -235,8 +237,8 @@ constexpr std::array<size_t, 14> problem_sizes
     1ull << 16,
     1ull << 18,
     1ull << 20,
-    1ull << 22,
-    1ull << 24,
+    //1ull << 22,
+    //1ull << 24,
 };
 
 template<typename F>
@@ -290,10 +292,10 @@ struct shared_data_std_random
 struct crand_init_data_t{};
 
 template<typename T>
-crand_init_data_t init_crand(int ti, const shared_data_crand<T>& shd) { return {}; } //noop
+crand_init_data_t init_crand(float ti, const shared_data_crand<T>& shd) { return {}; } //noop
 
 template<typename T>
-void loop_crand(int i, const crand_init_data_t& init, const shared_data_crand<T>& shd)
+void loop_crand(float i, const crand_init_data_t& init, const shared_data_crand<T>& shd)
 {
     shd.data[i] = rand();
 }
@@ -301,17 +303,17 @@ void loop_crand(int i, const crand_init_data_t& init, const shared_data_crand<T>
 struct std_random_init_data
 {
     std::mt19937 gen;
-    std::uniform_int_distribution<> dist;
+    std::uniform_real_distribution<> dist;
 };
 
 template<typename T>
-std_random_init_data init_std_random(int ti, shared_data_std_random<T>& shd)
+std_random_init_data init_std_random(float ti, shared_data_std_random<T>& shd)
 {
-    return {std::mt19937(shd.rd()), std::uniform_int_distribution<>(1, 1000)};
+    return {std::mt19937(shd.rd()), std::uniform_real_distribution<>(0, 10)};
 }
 
 template<typename T>
-void loop_std_random(int i, std_random_init_data& init, const shared_data_std_random<T>& shd)
+void loop_std_random(float i, std_random_init_data& init, const shared_data_std_random<T>& shd)
 {
     shd.data[i] = init.dist(init.gen);
 }
@@ -335,12 +337,12 @@ void run_all_crand()
     {
         for(auto schedule_type : schedule_types)
         {
-            shared_data_crand<int> shd{
-                    .data = std::make_unique<int[]>(problem_size)
+            shared_data_crand<float> shd{
+                    .data = std::make_unique<float[]>(problem_size)
             };
             auto pf = parallel_for(schedule_type);
 
-            auto [mean, std] = time_it([&](){pf.run(problem_size, shd, init_crand<int>, loop_crand<int>);}, 100);
+            auto [mean, std] = time_it([&](){pf.run(problem_size, shd, init_crand<float>, loop_crand<float>);}, 100);
 
             cout <<
                  std::left << std::setw(20) << problem_size << "," <<
@@ -371,13 +373,13 @@ void run_all_std_random()
     {
         for(auto schedule_type : schedule_types)
         {
-            shared_data_std_random<int> shd{
-                .data = std::make_unique<int[]>(problem_size),
+            shared_data_std_random<float> shd{
+                .data = std::make_unique<float[]>(problem_size),
                 .rd = std::random_device()
             };
             auto pf = parallel_for(schedule_type);
 
-            auto [mean, std] = time_it([&](){pf.run(problem_size, shd, init_std_random<int>, loop_std_random<int>);}, 100);
+            auto [mean, std] = time_it([&](){pf.run(problem_size, shd, init_std_random<float>, loop_std_random<float>);}, 100);
 
             cout <<
                  std::left << std::setw(20) << problem_size << "," <<
@@ -389,11 +391,96 @@ void run_all_std_random()
     }
 }
 
+template<typename T>
+T sum(size_t problem_size, const shared_data_std_random<T>& shd, T v)
+{
+    auto it = shd.data.get();
+    auto end = it + problem_size;
+    while(it != end) v += *it++;
+    return v;
+}
+
+template<typename T>
+T sum_multiple_times_sequential(size_t problem_size, size_t sums_count, const shared_data_std_random<T>& shd, T v)
+{
+    auto total_sum = v;
+#pragma omp parallel for default(none) shared(sums_count, problem_size, shd, v) reduction(+ : total_sum) num_threads(1)
+    for(size_t i=0;i<sums_count;i++)
+    {
+        total_sum += sum(problem_size, shd, v);
+    }
+    return total_sum;
+}
+
+template<typename T>
+T sum_multiple_times_parallel(size_t problem_size, size_t sums_count, const shared_data_std_random<T>& shd, T v)
+{
+    auto total_sum = v;
+#pragma omp parallel for default(none) shared(sums_count, problem_size, shd, v) reduction(+ : total_sum) schedule(static, 128) num_threads(4)
+    for(size_t i=0;i<sums_count;i++)
+    {
+        total_sum += sum(problem_size, shd, v);
+    }
+    return total_sum;
+}
+
+template<typename T>
+T sum_multiple_times_parallel_cf(size_t problem_size, size_t sums_count, const shared_data_std_random<T>& shd, T v)
+{
+    auto total_sum = v;
+    for(size_t _=0;_<sums_count;_++)
+    {
+#pragma omp parallel for default(none) shared(problem_size, shd, v) reduction(+ : total_sum) schedule(static, 128) num_threads(4)
+        for(size_t i=0;i<problem_size;i++)
+        {
+            total_sum += shd.data[i];
+        }
+    }
+    return total_sum;
+}
+
 int main(int argc, char* argv[])
 {
-    omp_set_num_threads(16);
+    using std::cout;
+    using std::cin;
+    using std::endl;
 
-    run_all_std_random();
+    using seconds_double_t = std::chrono::duration<double, std::ratio<1, 1>>;
+
+    constexpr size_t problem_size = 1024*1024*32;
+    constexpr size_t sums_count = 4;
+    shared_data_std_random<float> shd{
+            .data = std::make_unique<float[]>(problem_size),
+            .rd = std::random_device()
+    };
+    std::fill(shd.data.get(), shd.data.get() + problem_size, 1.0f);
+
+    // check correctness
+
+    auto seq_sum = sum_multiple_times_sequential<float>(problem_size, sums_count, shd, 0.0f);
+    auto par_sum = sum_multiple_times_parallel<float>(problem_size, sums_count, shd, 0.0f);
+    auto par_cf_sum = sum_multiple_times_parallel_cf<float>(problem_size, sums_count, shd, 0.0f);
+
+    cout << "seq sum check = " << seq_sum << endl;
+    cout << "par sum check = " << par_sum << endl;
+    cout << "par sum cf check = " << par_cf_sum << endl;
+
+    auto [seq_mean, seq_std] = time_it([&](){sum_multiple_times_sequential<float>(problem_size, sums_count, shd, 0.0f);}, 10);
+    cout << "sum " << sums_count << " times sequentially: " <<
+         std::chrono::duration_cast<seconds_double_t>(seq_mean).count() << " +/- " <<
+         std::chrono::duration_cast<seconds_double_t>(seq_std).count() << 's' << endl;
+
+    auto [par_mean, par_std] = time_it([&](){sum_multiple_times_parallel<float>(problem_size, sums_count, shd, 0.0f);}, 100);
+    cout << "sum " << sums_count << " times parallel: " <<
+         std::chrono::duration_cast<seconds_double_t>(par_mean).count() << " +/- " <<
+         std::chrono::duration_cast<seconds_double_t>(par_std).count() << 's' << endl;
+
+    auto [par_cf_mean, par_cf_std] = time_it([&](){sum_multiple_times_parallel_cf<float>(problem_size, sums_count, shd, 0.0f);}, 100);
+    cout << "sum " << sums_count << " times parallel cf: " <<
+         std::chrono::duration_cast<seconds_double_t>(par_cf_mean).count() << " +/- " <<
+         std::chrono::duration_cast<seconds_double_t>(par_cf_std).count() << 's' << endl;
+
+    //run_all_std_random();
 
     return 0;
 }
