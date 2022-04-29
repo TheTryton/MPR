@@ -254,9 +254,9 @@ int main(int argc, char* argv[])
     auto v_range = value_range<float>{0.0f, 10.0f};
     auto schedule_type = guided_schedule{.chunk_size=32};
 
-    auto data = allocate_data<float>(20);
+    auto data = allocate_data<float>(100000);
     generate_data(data, v_range, schedule_type, 4);
-    std::cout << data << std::endl;
+    //std::cout << data << std::endl;
     /*bucket_sort()
     bucket_sort_v1(
         std::span<float>(std::begin(data), std::end(data)),
@@ -268,10 +268,10 @@ int main(int argc, char* argv[])
         1,
         32
     );*/
-    bucket_sort(std::begin(data), std::end(data), v_range);
+    bucket_sort(std::execution::par, std::begin(data), std::end(data), v_range);
 
     std::cout << std::is_sorted(std::begin(data), std::end(data)) << std::endl;
-    std::cout << data << std::endl;
+    //std::cout << data << std::endl;
 
     return 0;
 }

@@ -20,7 +20,7 @@ static void visit_schedule_t(const static_schedule& st_sch, std::optional<size_t
                 auto init_data = init(omp_get_thread_num(), shared_data);
 
 #pragma omp for schedule(static, *st_sch.chunk_size)
-                for(size_t i = 0; i < problem_size; i++) loop(i, init_data, shared_data);
+                for(long i = 0; i < problem_size; i++) loop(i, init_data, shared_data);
             }
         }
         else
@@ -30,7 +30,7 @@ static void visit_schedule_t(const static_schedule& st_sch, std::optional<size_t
                 auto init_data = init(omp_get_thread_num(), shared_data);
 
 #pragma omp for schedule(static)
-                for(size_t i = 0; i < problem_size; i++) loop(i, init_data, shared_data);
+                for(long i = 0; i < problem_size; i++) loop(i, init_data, shared_data);
             }
         }
     }
@@ -43,7 +43,7 @@ static void visit_schedule_t(const static_schedule& st_sch, std::optional<size_t
                 auto init_data = init(omp_get_thread_num(), shared_data);
 
 #pragma omp for schedule(static, *st_sch.chunk_size)
-                for(size_t i = 0; i < problem_size; i++) loop(i, init_data, shared_data);
+                for(long i = 0; i < problem_size; i++) loop(i, init_data, shared_data);
             }
         }
         else
@@ -53,7 +53,7 @@ static void visit_schedule_t(const static_schedule& st_sch, std::optional<size_t
                 auto init_data = init(omp_get_thread_num(), shared_data);
 
 #pragma omp for schedule(static)
-                for(size_t i = 0; i < problem_size; i++) loop(i, init_data, shared_data);
+                for(long i = 0; i < problem_size; i++) loop(i, init_data, shared_data);
             }
         }
     }
@@ -70,7 +70,7 @@ static void visit_schedule_t(const dynamic_schedule& st_sch, std::optional<size_
                 auto init_data = init(omp_get_thread_num(), shared_data);
 
 #pragma omp for schedule(dynamic, *st_sch.chunk_size)
-                for(size_t i = 0; i < problem_size; i++) loop(i, init_data, shared_data);
+                for(long i = 0; i < problem_size; i++) loop(i, init_data, shared_data);
             }
         }
         else
@@ -80,7 +80,7 @@ static void visit_schedule_t(const dynamic_schedule& st_sch, std::optional<size_
                 auto init_data = init(omp_get_thread_num(), shared_data);
 
 #pragma omp for schedule(dynamic)
-                for(size_t i = 0; i < problem_size; i++) loop(i, init_data, shared_data);
+                for(long i = 0; i < problem_size; i++) loop(i, init_data, shared_data);
             }
         }
     }
@@ -93,7 +93,7 @@ static void visit_schedule_t(const dynamic_schedule& st_sch, std::optional<size_
                 auto init_data = init(omp_get_thread_num(), shared_data);
 
 #pragma omp for schedule(dynamic, *st_sch.chunk_size)
-                for (size_t i = 0; i < problem_size; i++) loop(i, init_data, shared_data);
+                for (long i = 0; i < problem_size; i++) loop(i, init_data, shared_data);
             }
         }
         else
@@ -103,7 +103,7 @@ static void visit_schedule_t(const dynamic_schedule& st_sch, std::optional<size_
                 auto init_data = init(omp_get_thread_num(), shared_data);
 
 #pragma omp for schedule(dynamic)
-                for (size_t i = 0; i < problem_size; i++) loop(i, init_data, shared_data);
+                for (long i = 0; i < problem_size; i++) loop(i, init_data, shared_data);
             }
         }
     }
@@ -120,7 +120,7 @@ static void visit_schedule_t(const guided_schedule& st_sch, std::optional<size_t
                 auto init_data = init(omp_get_thread_num(), shared_data);
 
 #pragma omp for schedule(guided, *st_sch.chunk_size)
-                for(size_t i = 0; i < problem_size; i++) loop(i, init_data, shared_data);
+                for(long i = 0; i < problem_size; i++) loop(i, init_data, shared_data);
             }
         }
         else
@@ -130,7 +130,7 @@ static void visit_schedule_t(const guided_schedule& st_sch, std::optional<size_t
                 auto init_data = init(omp_get_thread_num(), shared_data);
 
 #pragma omp for schedule(guided)
-                for(size_t i = 0; i < problem_size; i++) loop(i, init_data, shared_data);
+                for(long i = 0; i < problem_size; i++) loop(i, init_data, shared_data);
             }
         }
     }
@@ -143,7 +143,7 @@ static void visit_schedule_t(const guided_schedule& st_sch, std::optional<size_t
                 auto init_data = init(omp_get_thread_num(), shared_data);
 
 #pragma omp for schedule(guided, *st_sch.chunk_size)
-                for(size_t i = 0; i < problem_size; i++) loop(i, init_data, shared_data);
+                for(long i = 0; i < problem_size; i++) loop(i, init_data, shared_data);
             }
         }
         else
@@ -153,7 +153,7 @@ static void visit_schedule_t(const guided_schedule& st_sch, std::optional<size_t
                 auto init_data = init(omp_get_thread_num(), shared_data);
 
 #pragma omp for schedule(guided)
-                for(size_t i = 0; i < problem_size; i++) loop(i, init_data, shared_data);
+                for(long i = 0; i < problem_size; i++) loop(i, init_data, shared_data);
             }
         }
     }
@@ -172,7 +172,7 @@ static void visit_schedule_t(const auto_schedule& st_sch, std::optional<size_t> 
 #elif
 #pragma omp for schedule(auto)
 #endif
-            for (size_t i = 0; i < problem_size; i++) loop(i, init_data, shared_data);
+            for (long i = 0; i < problem_size; i++) loop(i, init_data, shared_data);
         }
     }
     else
@@ -185,7 +185,7 @@ static void visit_schedule_t(const auto_schedule& st_sch, std::optional<size_t> 
 #elif
 #pragma omp for schedule(auto)
 #endif
-            for (size_t i = 0; i < problem_size; i++) loop(i, init_data, shared_data);
+            for (long i = 0; i < problem_size; i++) loop(i, init_data, shared_data);
         }
     }
 }
@@ -199,7 +199,7 @@ static void visit_schedule_t(const runtime_schedule& st_sch, std::optional<size_
             auto init_data = init(omp_get_thread_num(), shared_data);
 
 #pragma omp for schedule(runtime)
-            for(size_t i = 0; i < problem_size; i++) loop(i, init_data, shared_data);
+            for(long i = 0; i < problem_size; i++) loop(i, init_data, shared_data);
         }
     }
     else
@@ -209,7 +209,7 @@ static void visit_schedule_t(const runtime_schedule& st_sch, std::optional<size_
             auto init_data = init(omp_get_thread_num(), shared_data);
 
 #pragma omp for schedule(runtime)
-            for(size_t i = 0; i < problem_size; i++) loop(i, init_data, shared_data);
+            for(long i = 0; i < problem_size; i++) loop(i, init_data, shared_data);
         }
     }
 }

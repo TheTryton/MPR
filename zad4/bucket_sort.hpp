@@ -32,7 +32,7 @@ void bucket_sort_impl(
 
     for(auto& bucket : buckets)
     {
-        std::stable_sort(execution_policy, std::begin(bucket), std::end(bucket), [&keyf](auto&& l, auto&& r)
+        std::stable_sort(std::begin(bucket), std::end(bucket), [&keyf](auto&& l, auto&& r)
         {
             return keyf(l) < keyf(r);
         });

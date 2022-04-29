@@ -148,8 +148,8 @@ public:
     using reference = value_type&;
     using const_reference = const value_type&;
 
-    using iterator = typename bucket_type::iterator;
-    using const_iterator = typename bucket_type::const_iterator;
+    using iterator = typename buckets_t<element_type, element_allocator_t, bucket_type, bucket_allocator_t>::iterator;
+    using const_iterator = typename buckets_t<element_type, element_allocator_t, bucket_type, bucket_allocator_t>::const_iterator;
 
     using size_type = typename bucket_type::size_type;
 private:
@@ -189,7 +189,7 @@ public:
         return std::accumulate(std::begin(_buckets), std::end(_buckets), size_type(0), [](auto a, auto b){ return a + std::size(b);});
     }
 public:
-    constexpr iterator begin()  noexcept { return std::begin(_buckets); }
+    constexpr iterator begin() noexcept { return std::begin(_buckets); }
     constexpr const_iterator begin() const noexcept { return std::begin(_buckets); }
     constexpr iterator end() noexcept { return std::end(_buckets); }
     constexpr const_iterator end() const noexcept { return std::end(_buckets); }
@@ -214,13 +214,13 @@ public:
 public:
     void insert(const element_type& value) noexcept
     {
-        std::lock_guard{_lock};
-        _buckets[select_bucket(value)].insert(value);
+        std::lock_guard l{_lock};
+        _buckets.insert(value);
     }
     void insert(element_type&& value) noexcept
     {
-        std::lock_guard{_lock};
-        _buckets[select_bucket(value)].insert(std::move(value));
+        std::lock_guard l{_lock};
+        _buckets.insert(std::move(value));
     }
 public:
     template<

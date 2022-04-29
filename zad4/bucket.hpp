@@ -99,8 +99,10 @@ private:
 public:
     constexpr variable_size_bucket_t() noexcept = default;
     variable_size_bucket_t(size_type initial_capacity, ElementAllocator alloc)
-        : _data(initial_capacity, std::move(alloc))
-    { }
+        : _data(std::move(alloc))
+    {
+        _data.reserve(initial_capacity);
+    }
     variable_size_bucket_t(const variable_size_bucket_t& other) = default;
     variable_size_bucket_t(variable_size_bucket_t&& other) noexcept = default;
 public:
