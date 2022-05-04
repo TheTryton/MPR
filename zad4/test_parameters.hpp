@@ -1,8 +1,10 @@
 #pragma once
 
-#include <schedule.hpp>
+#include <parallel_primitives.hpp>
 #include <value_range.hpp>
 #include <array>
+
+using namespace parallel;
 
 constexpr std::array<schedule_t, 29> schedule_types
 {

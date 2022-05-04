@@ -40,10 +40,10 @@ public:
     constexpr reference operator*() const noexcept { assert(_current < _end); return *_current; }
     constexpr pointer operator->() const noexcept { assert(_current < _end); return _current; }
 public:
-    constexpr safe_pointer_iterator& operator++() { ++_current; return *this; }
-    constexpr safe_pointer_iterator operator++(int) const noexcept { auto copy = *this; return ++copy; }
-    constexpr safe_pointer_iterator& operator--() { --_current; return *this; }
-    constexpr safe_pointer_iterator operator--(int) const noexcept { auto copy = *this; return --copy; }
+    constexpr safe_pointer_iterator& operator++() noexcept { ++_current; return *this; }
+    constexpr safe_pointer_iterator operator++(int) noexcept { auto copy = *this; ++*this; return copy; }
+    constexpr safe_pointer_iterator& operator--() noexcept { --_current; return *this; }
+    constexpr safe_pointer_iterator operator--(int) noexcept { auto copy = *this; --*this; return copy; }
 public:
     constexpr bool operator<=(const safe_pointer_iterator& other) const noexcept { return _current <= other._current; }
     constexpr bool operator>=(const safe_pointer_iterator& other) const noexcept { return _current >= other._current; }
@@ -60,8 +60,9 @@ public:
 
 template<typename PointerType>
 constexpr safe_pointer_iterator<PointerType> operator+(
-    const safe_pointer_iterator<PointerType>& ptr,
-    typename std::iterator_traits<PointerType>::difference_type n) noexcept { return ptr + n; }
+    typename std::iterator_traits<PointerType>::difference_type n,
+    const safe_pointer_iterator<PointerType>& ptr
+    ) noexcept { return ptr + n; }
 
 template<
     typename ElementType,

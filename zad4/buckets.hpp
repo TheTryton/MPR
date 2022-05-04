@@ -5,11 +5,49 @@
 
 #include <value_range.hpp>
 
+template<typename BucketsType, typename ElementType, typename ElementAllocator, typename BucketType, typename BucketAllocator>
+concept Buckets = requires(BucketsType buckets, ElementType element, typename BucketType::size_type n)
+{
+    typename BucketsType::size_type;
+
+    requires std::is_default_constructible_v<BucketsType>;
+    requires std::is_constructible_v<BucketsType,
+        typename BucketsType::size_type,
+        typename BucketsType::size_type,
+        value_range<ElementType>,
+        ElementAllocator,
+        BucketAllocator>;
+
+    requires std::is_copy_constructible_v<BucketsType>;
+    requires std::is_move_constructible_v<BucketsType>;
+
+    requires std::is_copy_assignable_v<BucketsType>;
+    requires std::is_move_assignable_v<BucketsType>;
+
+    { buckets.begin() } -> std::random_access_iterator;
+    { buckets.end() } -> std::random_access_iterator;
+
+    requires Bucket<typename std::iterator_traits<decltype(buckets.begin())>::value_type, ElementType, ElementAllocator>;
+    requires Bucket<typename std::iterator_traits<decltype(buckets.end())>::value_type, ElementType, ElementAllocator>;
+
+    { buckets[n] } -> std::convertible_to<BucketType>;
+    { buckets.at(n) } -> std::convertible_to<BucketType>;
+
+    { buckets.size() } -> std::same_as<typename BucketType::size_type>;
+    { buckets.total_size() } -> std::same_as<typename BucketType::size_type>;
+
+    { buckets.can_accept_value(element) } -> std::convertible_to<bool>;
+    { buckets.bucket_value_range(n) } -> std::same_as<value_range<ElementType>>;
+
+    { buckets.insert(element) };
+    { buckets.insert(std::move(element)) };
+};
+
 template<
     typename ElementType,
-    typename ElementAllocator = std::allocator<ElementType>,
-    typename BucketType = fixed_size_bucket_t<ElementType, ElementAllocator>,
-    typename BucketAllocator = std::allocator<BucketType>
+    Allocator<ElementType> ElementAllocator = std::allocator<ElementType>,
+    Bucket<ElementType, ElementAllocator> BucketType = fixed_size_bucket_t<ElementType, ElementAllocator>,
+    Allocator<BucketType> BucketAllocator = std::allocator<BucketType>
     >
 class buckets_t
 {
@@ -75,7 +113,7 @@ public:
     }
     constexpr value_range<element_type> bucket_value_range(size_type bucket_index) const noexcept
     {
-        return _values_range.split_index(size(), bucket_index);
+        return _values_range.split_index(bucket_index, size());
     }
 public:
     void insert(const element_type& value) noexcept
@@ -89,9 +127,9 @@ public:
 public:
     template<
         typename ElementTypeO,
-        typename ElementAllocatorO,
-        typename BucketTypeO,
-        typename BucketAllocatorO
+        Allocator<ElementTypeO> ElementAllocatorO,
+        Bucket<ElementTypeO, ElementAllocatorO> BucketTypeO,
+        Allocator<BucketTypeO> BucketAllocatorO
         >
     friend std::ostream& operator<<(
         std::ostream& o,
@@ -101,11 +139,72 @@ public:
         );
 };
 
+static_assert(Buckets<
+    buckets_t<
+        int,
+        std::allocator<int>,
+        fixed_size_bucket_t<int, std::allocator<int>>,
+        std::allocator<fixed_size_bucket_t<int, std::allocator<int>>>
+    >,
+    int,
+    std::allocator<int>,
+    fixed_size_bucket_t<int, std::allocator<int>>,
+    std::allocator<fixed_size_bucket_t<int, std::allocator<int>>>
+>);
+static_assert(Buckets<
+    buckets_t<
+        int,
+        std::allocator<int>,
+        variable_size_bucket_t<int, std::allocator<int>>,
+        std::allocator<variable_size_bucket_t<int, std::allocator<int>>>
+    >,
+    int,
+    std::allocator<int>,
+    variable_size_bucket_t<int, std::allocator<int>>,
+    std::allocator<variable_size_bucket_t<int, std::allocator<int>>>
+>);
+static_assert(Buckets<
+    buckets_t<
+        int,
+        std::allocator<int>,
+        threadsafe::lockfree_fixed_size_bucket_t<int, std::allocator<int>>,
+        std::allocator<threadsafe::lockfree_fixed_size_bucket_t<int, std::allocator<int>>>
+    >,
+    int,
+    std::allocator<int>,
+    threadsafe::lockfree_fixed_size_bucket_t<int, std::allocator<int>>,
+    std::allocator<threadsafe::lockfree_fixed_size_bucket_t<int, std::allocator<int>>>
+>);
+static_assert(Buckets<
+    buckets_t<
+        int,
+        std::allocator<int>,
+        threadsafe::thread_safe_bucket_t<int, std::allocator<int>, fixed_size_bucket_t<int, std::allocator<int>>>,
+        std::allocator<threadsafe::thread_safe_bucket_t<int, std::allocator<int>, fixed_size_bucket_t<int, std::allocator<int>>>>
+    >,
+    int,
+    std::allocator<int>,
+    threadsafe::thread_safe_bucket_t<int, std::allocator<int>, fixed_size_bucket_t<int, std::allocator<int>>>,
+    std::allocator<threadsafe::thread_safe_bucket_t<int, std::allocator<int>, fixed_size_bucket_t<int, std::allocator<int>>>>
+>);
+static_assert(Buckets<
+    buckets_t<
+        int,
+        std::allocator<int>,
+        threadsafe::thread_safe_bucket_t<int, std::allocator<int>, variable_size_bucket_t<int, std::allocator<int>>>,
+        std::allocator<threadsafe::thread_safe_bucket_t<int, std::allocator<int>, variable_size_bucket_t<int, std::allocator<int>>>>
+    >,
+    int,
+    std::allocator<int>,
+    threadsafe::thread_safe_bucket_t<int, std::allocator<int>, variable_size_bucket_t<int, std::allocator<int>>>,
+    std::allocator<threadsafe::thread_safe_bucket_t<int, std::allocator<int>, variable_size_bucket_t<int, std::allocator<int>>>>
+>);
+
 template<
     typename ElementType,
-    typename ElementAllocator,
-    typename BucketType,
-    typename BucketAllocator
+    Allocator<ElementType> ElementAllocator,
+    Bucket<ElementType, ElementAllocator> BucketType,
+    Allocator<BucketType> BucketAllocator
     >
 std::ostream& operator<<(
     std::ostream& o,
@@ -129,11 +228,11 @@ class alignas(BucketAlignment) aligned_bucket_t
 
 template<
     typename ElementType,
-    typename ElementAllocator = std::allocator<ElementType>,
-    typename BaseBucketType = fixed_size_bucket_t<ElementType, ElementAllocator>,
+    Allocator<ElementType> ElementAllocator = std::allocator<ElementType>,
+    Bucket<ElementType, ElementAllocator> BaseBucketType = fixed_size_bucket_t<ElementType, ElementAllocator>,
     size_t BucketAlignmentOverride = std::alignment_of_v<BaseBucketType>,
-    typename AlignedBucketAllocator = std::allocator<aligned_bucket_t<BaseBucketType, BucketAlignmentOverride>>,
-    typename LockType = std::mutex
+    Allocator<aligned_bucket_t<BaseBucketType, BucketAlignmentOverride>> AlignedBucketAllocator = std::allocator<aligned_bucket_t<BaseBucketType, BucketAlignmentOverride>>,
+    Lockable LockType = std::mutex
     >
 class thread_safe_buckets_t
 {
@@ -225,11 +324,11 @@ public:
 public:
     template<
         typename ElementTypeO,
-        typename ElementAllocatorO,
-        typename BaseBucketTypeO,
+        Allocator<ElementTypeO> ElementAllocatorO,
+        Bucket<ElementTypeO, ElementAllocatorO> BaseBucketTypeO,
         size_t BucketAlignmentOverrideO,
-        typename AlignedBucketAllocatorO,
-        typename LockTypeO
+        Allocator<aligned_bucket_t<BaseBucketTypeO, BucketAlignmentOverrideO>> AlignedBucketAllocatorO,
+        Lockable LockTypeO
             >
     friend std::ostream& operator<<(
         std::ostream& o,
@@ -242,11 +341,11 @@ public:
 
 template<
     typename ElementType,
-    typename ElementAllocator,
-    typename BaseBucketType,
+    Allocator<ElementType> ElementAllocator,
+    Bucket<ElementType, ElementAllocator> BaseBucketType,
     size_t BucketAlignmentOverride,
-    typename AlignedBucketAllocator,
-    typename LockType
+    Allocator<aligned_bucket_t<BaseBucketType, BucketAlignmentOverride>> AlignedBucketAllocator,
+    Lockable LockType
     >
 std::ostream& operator<<(
     std::ostream& o,

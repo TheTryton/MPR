@@ -1,4 +1,4 @@
-#include <schedule.hpp>
+#include <parallel_primitives.hpp>
 #include <parallel_for.hpp>
 #include <time_it.hpp>
 #include <buckets.hpp>
@@ -13,6 +13,7 @@
 #include <sstream>
 #include <span>
 
+using namespace parallel;
 
 template<typename T, typename AllocT>
 struct shared_data_std_random
@@ -61,7 +62,7 @@ void generate_data(
         .value_range = value_range
     };
 
-    parallel_for::run(
+    run(
         data.size(),
         schedule_type,
         parallel_for_shared_data,
@@ -247,31 +248,112 @@ void bucket_sort_v1(
 
 
 */
+template<std::random_access_iterator RandIt>
+RandIt unsorted_index(RandIt first, RandIt last)
+{
+    auto prev = first;
+    ++first;
+    while (first != last)
+    {
+        if (*prev > *first)
+            return first;
+        prev = first;
+        ++first;
+    }
+    return last;
+}
+
+void measure_v1(size_t length, const value_range<double>& v_range)
+{
+    auto schedule_type = guided_schedule{ .chunk_size = 32 };
+
+    auto start = std::chrono::high_resolution_clock::now();
+
+    auto data = allocate_data<double>(length);
+    generate_data(data, v_range, schedule_type);
+    bucket_sort_v1(std::begin(data), std::end(data), v_range);
+
+    auto end = std::chrono::high_resolution_clock::now();
+
+    std::cout << (end - start).count() / 1e9 << "s" << std::endl;
+
+    auto sorted = std::is_sorted(std::begin(data), std::end(data));
+    std::cout << sorted << std::endl;
+    if (!sorted)
+    {
+        auto it = unsorted_index(std::begin(data), std::end(data));
+        std::cout << (it - std::begin(data)) << std::endl;
+        for (auto first = it - 10; first != it + 10; first++)
+        {
+            std::cout << *first << ", ";
+        }
+    }
+}
+
+void measure_v2(size_t length, const value_range<double>& v_range)
+{
+    auto schedule_type = guided_schedule{ .chunk_size = 32 };
+
+    auto start = std::chrono::high_resolution_clock::now();
+
+    auto data = allocate_data<double>(length);
+    generate_data(data, v_range, schedule_type);
+    bucket_sort_v2(std::begin(data), std::end(data), v_range);
+
+    auto end = std::chrono::high_resolution_clock::now();
+
+    std::cout << (end - start).count() / 1e9 << "s" << std::endl;
+
+    auto sorted = std::is_sorted(std::begin(data), std::end(data));
+    std::cout << sorted << std::endl;
+    if (!sorted)
+    {
+        auto it = unsorted_index(std::begin(data), std::end(data));
+        std::cout << (it - std::begin(data)) << std::endl;
+        for (auto first = it - 10; first != it + 10; first++)
+        {
+            std::cout << *first << ", ";
+        }
+    }
+}
+
+void measure_v3(size_t length, const value_range<double>& v_range)
+{
+    auto schedule_type = guided_schedule{ .chunk_size = 32 };
+
+    auto start = std::chrono::high_resolution_clock::now();
+
+    auto data = allocate_data<double>(length);
+    generate_data(data, v_range, schedule_type);
+    bucket_sort_v3(std::begin(data), std::end(data), v_range);
+
+    auto end = std::chrono::high_resolution_clock::now();
+
+    std::cout << (end - start).count() / 1e9 << "s" << std::endl;
+
+    auto sorted = std::is_sorted(std::begin(data), std::end(data));
+    std::cout << sorted << std::endl;
+    if (!sorted)
+    {
+        auto it = unsorted_index(std::begin(data), std::end(data));
+        std::cout << (it - std::begin(data)) << std::endl;
+        for (auto first = it - 10; first != it + 10; first++)
+        {
+            std::cout << *first << ", ";
+        }
+    }
+}
+
 int main(int argc, char* argv[])
 {
     omp_set_num_threads(16);
 
-    auto v_range = value_range<float>{0.0f, 10.0f};
-    auto schedule_type = guided_schedule{.chunk_size=32};
-
-    auto data = allocate_data<float>(100000);
-    generate_data(data, v_range, schedule_type, 4);
-    //std::cout << data << std::endl;
-    /*bucket_sort()
-    bucket_sort_v1(
-        std::span<float>(std::begin(data), std::end(data)),
-        value_range,
-        schedule_type, 128,
-        create_buckets_factory<float, std::allocator<float>, variable_size_bucket_t<float>>(2, 1.0),
-        []<typename It>(It b, It e){ std::sort(b, e); },
-        sorting_order_t::ascending,
-        1,
-        32
-    );*/
-    bucket_sort(std::execution::par, std::begin(data), std::end(data), v_range);
-
-    std::cout << std::is_sorted(std::begin(data), std::end(data)) << std::endl;
-    //std::cout << data << std::endl;
+    auto length = 10000000;
+    auto v_range = value_range<double>{0.0f, 1.0f};
+    
+    measure_v1(length, v_range);
+    measure_v2(length, v_range);
+    measure_v3(length, v_range);
 
     return 0;
 }

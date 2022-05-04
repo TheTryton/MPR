@@ -1,17 +1,19 @@
 cmake_minimum_required(VERSION 3.20)
 
-project(lab3)
+project(lab4)
 
 find_package(OpenMP) 
 
 
-add_executable(lab3
+add_executable(lab4
+        parallel_primitives.hpp
+        parallel_primitives.cpp
+
         parallel_for.hpp
         parallel_for.cpp
 
-        schedule.hpp
-        schedule.cpp
-
+        parallel_max.hpp
+       
         value_range.hpp
         fixed_size_dynamic_array.hpp
 
@@ -27,15 +29,15 @@ add_executable(lab3
 
         main.cpp
         )
-target_link_libraries(lab3 PRIVATE OpenMP::OpenMP_CXX)
-target_include_directories(lab3 PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(lab4 PRIVATE OpenMP::OpenMP_CXX)
+target_include_directories(lab4 PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
 if (CMAKE_GENERATOR MATCHES "Visual Studio")
-    target_compile_options(lab3 PRIVATE "-openmp:llvm")
+    target_compile_options(lab4 PRIVATE "-openmp:llvm")
 endif()
 
 
-set_target_properties(lab3
+set_target_properties(lab4
         PROPERTIES
         CXX_STANDARD 20
         CXX_STANDARD_REQUIRED YES

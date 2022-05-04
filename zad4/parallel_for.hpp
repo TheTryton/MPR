@@ -2,9 +2,9 @@
 
 #include <omp.h>
 
-#include <schedule.hpp>
+#include <parallel_primitives.hpp>
 
-namespace parallel_for
+namespace parallel
 {
 namespace detail
 {
@@ -169,7 +169,7 @@ static void visit_schedule_t(const auto_schedule& st_sch, std::optional<size_t> 
 
 #ifdef _MSC_VER
 #pragma omp for schedule(runtime)
-#elif
+#else
 #pragma omp for schedule(auto)
 #endif
             for (long i = 0; i < problem_size; i++) loop(i, init_data, shared_data);
@@ -182,7 +182,7 @@ static void visit_schedule_t(const auto_schedule& st_sch, std::optional<size_t> 
             auto init_data = init(omp_get_thread_num(), shared_data);
 #ifdef _MSC_VER
 #pragma omp for schedule(runtime)
-#elif
+#else
 #pragma omp for schedule(auto)
 #endif
             for (long i = 0; i < problem_size; i++) loop(i, init_data, shared_data);
