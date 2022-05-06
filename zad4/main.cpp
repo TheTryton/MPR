@@ -4,16 +4,17 @@
 #include <buckets.hpp>
 #include <bucket_sort.hpp>
 
-#include <test_parameters.hpp>
-
 #include <memory>
 #include <random>
 #include <iostream>
+#include <fstream>
 #include <iomanip>
 #include <sstream>
 #include <span>
 
 using namespace parallel;
+
+// GENERATE
 
 template<typename T, typename AllocT>
 struct shared_data_std_random
@@ -71,183 +72,9 @@ void generate_data(
         thread_count
     );
 }
-/*
-template<typename T, typename AllocT = std::allocator<T>, typename BT = fixed_bucket_t<T, AllocT>, typename BTAllocT = std::allocator<BT>>
-auto create_buckets_factory(size_t bucket_count, double bucket_percentage_size, AllocT alloc = {}, BTAllocT bt_alloc = {})
-{
-    auto buckets_factory = [bucket_count, bucket_percentage_size, alloc, bt_alloc](size_t data_size, range<T> value_range)
-    {
-        double bucket_base_size = (double)data_size / (double)bucket_count;
-        auto bucket_size = static_cast<size_t>(std::ceil(bucket_base_size * bucket_percentage_size));
 
-        auto bucket_selector = [value_range](const T& value, size_t bucket_count)
-        {
-            auto coeff01 = (value - value_range.low) / value_range.length();
-            return std::pair{static_cast<size_t>(std::round(coeff01 * (bucket_count - 1))), dummy_mutex_t{}};
-        };
+// GENERATE
 
-        auto single_bucket_range_calculator = [value_range, bucket_count](size_t bucket_index)
-        {
-            auto single_bucket_length = value_range.length() / bucket_count;
-            auto single_bucket_low = value_range.low + single_bucket_length * bucket_index;
-            auto single_bucket_high = single_bucket_low + single_bucket_length;
-            return range<T>{.low = single_bucket_low, .high = single_bucket_high};
-        };
-
-        return std::tuple{
-            buckets_t<T, AllocT, BT, BTAllocT>{bucket_count, bucket_size, alloc, bt_alloc},
-            bucket_selector,
-            single_bucket_range_calculator
-        };
-    };
-
-    return buckets_factory;
-}
-
-enum class sorting_order_t
-{
-    descending,
-    ascending,
-};
-
-template<typename T, typename BT, typename BucketSelectorF>
-void bucketize_v1(
-    std::span<T> data,
-    size_t thread_starting_offset,
-    range<T> thread_value_range,
-    BT& buckets,
-    BucketSelectorF bucket_selector
-    )
-{
-    size_t data_size = data.size();
-    for(size_t i = 0; i < data_size; i++)
-    {
-        size_t oi = (i + thread_starting_offset) % data_size;
-        auto v = data[oi];
-
-        if(thread_value_range.contains(v))
-        {
-            buckets.insert(v, bucket_selector);
-        }
-    }
-}
-
-template<typename T, typename BucketsFactoryF, typename FallbackSortF>
-void bucket_sort_v1(
-    std::span<T> data,
-    range<T> value_range,
-    schedule_t schedule_type,
-    size_t single_thread_sort_threshold,
-    BucketsFactoryF buckets_factory,
-    FallbackSortF fallback_sort,
-    sorting_order_t sorting_order,
-    size_t thread_count,
-    size_t starting_offset
-    )
-{
-    if(data.size() <= 1)
-        return;
-
-    auto thread_value_range_length = value_range.length() / thread_count;
-    std::mutex save_mutex;
-    fixed_size_dynamic_array<size_t> sizes{};
-    fixed_size_dynamic_array<size_t> offsets{};
-
-#pragma omp parallel\
-    default(none)\
-    shared(\
-        schedule_type, offsets, sizes, buckets_factory,\
-        thread_value_range_length, value_range, data,\
-        std::cout, starting_offset, single_thread_sort_threshold,\
-        fallback_sort, save_mutex, sorting_order, thread_count)\
-    num_threads(thread_count)
-    {
-#pragma omp single
-        {
-            sizes = fixed_size_dynamic_array<size_t>(omp_get_num_threads(), 0);
-            offsets = fixed_size_dynamic_array<size_t>(omp_get_num_threads(), 0);
-        }
-#pragma omp barrier
-
-        size_t thread_index = omp_get_thread_num();
-        size_t thread_starting_offset = starting_offset * thread_index;
-
-        auto thread_value_range_offset = thread_value_range_length * thread_index;
-        auto thread_low = value_range.low + thread_value_range_offset;
-        auto thread_high = thread_low + thread_value_range_length;
-        auto thread_value_range = range<T>{
-            .low = thread_low,
-            .high = thread_high
-        };
-
-        auto [buckets, bucket_selector, single_bucket_range_calculator] = buckets_factory(data.size(), thread_value_range);
-
-        size_t data_size = data.size();
-
-        // bucketize
-        bucketize_v1(data, thread_starting_offset, thread_value_range, buckets, bucket_selector);
-
-        // recursively sort
-        size_t bucket_index = 0;
-        for(auto& bucket : buckets)
-        {
-            if(std::size(bucket) <= single_thread_sort_threshold)
-            {
-                fallback_sort(std::begin(bucket), std::end(bucket));
-            }
-            else
-            {
-                bucket_sort_v1(
-                    std::span<T>(std::begin(bucket), std::end(bucket)),
-                    single_bucket_range_calculator(bucket_index),
-                    schedule_type,
-                    single_thread_sort_threshold,
-                    buckets_factory,
-                    fallback_sort,
-                    sorting_order,
-                    1,
-                    starting_offset
-                );
-                bucket_index++;
-                //std::cout << bucket << std::endl;
-                //auto it = std::is_sorted_until(std::begin(bucket), std::end(bucket));
-                //std::cout << *(it - 1) << ", " << *it << ", " << *(it + 1) << std::endl;
-                //std::cout << (it - std::begin(bucket)) << std::endl;
-                //std::cout << std::is_sorted(std::begin(bucket), std::end(bucket)) << std::endl;
-            }
-        }
-
-        //std::stringstream ss;
-        //ss << "Thread [" << thread_index << "]:" << '\n';
-        //ss << "Range <" << thread_value_range.low << ", " << thread_value_range.high << ")" << '\n';
-        //ss << buckets << '\n';
-        //std::cout << ss.str() << std::flush;
-
-        // fill total bucket size of thread
-        {
-            std::lock_guard l{save_mutex};
-
-            sizes[thread_index] = buckets.total_size();
-        }
-#pragma omp barrier // wait for all threads to finish pushing their total bucket sizes
-#pragma omp single // compute offset partial sum
-        std::partial_sum(std::begin(sizes), std::end(sizes) - 1, std::begin(offsets) + 1);
-#pragma omp barrier
-        // copy back to original array with offset to preserve sorting order
-        {
-            std::lock_guard l{save_mutex};
-
-            auto offset =  offsets[thread_index];
-            auto total_size = buckets.total_size();
-            auto b = std::begin(data) + offset;
-            for(auto& bucket : buckets)
-                b = std::copy(std::begin(bucket), std::end(bucket), b);
-        }
-    }
-}
-
-
-*/
 template<std::random_access_iterator RandIt>
 RandIt unsorted_index(RandIt first, RandIt last)
 {
@@ -263,97 +90,585 @@ RandIt unsorted_index(RandIt first, RandIt last)
     return last;
 }
 
-void measure_v1(size_t length, const value_range<double>& v_range)
+template<typename KeyFunc = identity_key<double>, typename ElementAllocator = std::allocator<double>>
+void check_sorted(const fixed_size_dynamic_array<double, ElementAllocator>& data, KeyFunc key_func)
 {
-    auto schedule_type = guided_schedule{ .chunk_size = 32 };
+    auto sorted = std::is_sorted(std::begin(data), std::end(data), [&key_func](auto&& l, auto&& r) { return key_func(l) < key_func(r); });
+    
+    std::cout << "Check sorted: " << (sorted ? "true" : "false") << std::endl;
 
-    auto start = std::chrono::high_resolution_clock::now();
-
-    auto data = allocate_data<double>(length);
-    generate_data(data, v_range, schedule_type);
-    bucket_sort_v1(std::begin(data), std::end(data), v_range);
-
-    auto end = std::chrono::high_resolution_clock::now();
-
-    std::cout << (end - start).count() / 1e9 << "s" << std::endl;
-
-    auto sorted = std::is_sorted(std::begin(data), std::end(data));
-    std::cout << sorted << std::endl;
     if (!sorted)
     {
         auto it = unsorted_index(std::begin(data), std::end(data));
-        std::cout << (it - std::begin(data)) << std::endl;
-        for (auto first = it - 10; first != it + 10; first++)
+
+        std::cout << "First unsorted index: " << (it - std::begin(data)) << std::endl;
+
+        std::cout << "Elements around unsorted index:" << std::endl;
+        for (auto first = it - 10; first != it; first++)
         {
+            if (first < std::begin(data))
+                continue;
+            std::cout << *first << ", ";
+        }
+        std::cout << '[' << *it << ']' << ", ";
+        for (auto first = it; first != it + 10; first++)
+        {
+            if (first >= std::end(data))
+                break;
             std::cout << *first << ", ";
         }
     }
 }
 
-void measure_v2(size_t length, const value_range<double>& v_range)
+struct measure_data_point
 {
-    auto schedule_type = guided_schedule{ .chunk_size = 32 };
+    millis_double allocation;
+    millis_double generation;
+    bucket_sort_measurement bucket_sort_stats;
+    millis_double total;
+};
 
-    auto start = std::chrono::high_resolution_clock::now();
+struct measure_stats
+{
+    mean_stddev allocation;
+    mean_stddev generation;
+    bucket_sort_stats bucket_sort_stats;
+    mean_stddev total;
+};
 
-    auto data = allocate_data<double>(length);
-    generate_data(data, v_range, schedule_type);
-    bucket_sort_v2(std::begin(data), std::end(data), v_range);
-
-    auto end = std::chrono::high_resolution_clock::now();
-
-    std::cout << (end - start).count() / 1e9 << "s" << std::endl;
-
-    auto sorted = std::is_sorted(std::begin(data), std::end(data));
-    std::cout << sorted << std::endl;
-    if (!sorted)
-    {
-        auto it = unsorted_index(std::begin(data), std::end(data));
-        std::cout << (it - std::begin(data)) << std::endl;
-        for (auto first = it - 10; first != it + 10; first++)
-        {
-            std::cout << *first << ", ";
-        }
-    }
+measure_stats stats(const std::vector<measure_data_point>& dps)
+{
+    return measure_stats{
+        .allocation = stats(std::begin(dps), std::end(dps), [](const measure_data_point& dp) {return dp.allocation; }),
+        .generation = stats(std::begin(dps), std::end(dps), [](const measure_data_point& dp) {return dp.generation; }),
+        .bucket_sort_stats = {
+            .bucketization = stats(std::begin(dps), std::end(dps), [](const measure_data_point& dp) {return dp.bucket_sort_stats.bucketization; }),
+            .sequential_sorting = stats(std::begin(dps), std::end(dps), [](const measure_data_point& dp) {return dp.bucket_sort_stats.sequential_sorting; }),
+            .writing_back = stats(std::begin(dps), std::end(dps), [](const measure_data_point& dp) {return dp.bucket_sort_stats.writing_back; }),
+            .concatenation = stats(std::begin(dps), std::end(dps), [](const measure_data_point& dp) {return dp.bucket_sort_stats.concatenation ? *dp.bucket_sort_stats.concatenation : millis_double{}; }),
+            .total = stats(std::begin(dps), std::end(dps), [](const measure_data_point& dp) {return dp.bucket_sort_stats.total; }),
+        },
+        .total = stats(std::begin(dps), std::end(dps), [](const measure_data_point& dp) {return dp.total; }),
+    };
 }
 
-void measure_v3(size_t length, const value_range<double>& v_range)
+template<
+    typename KeyFunc = identity_key<double>,
+    typename ETAlloc = std::allocator<double>,
+    typename BucketType = variable_size_bucket_t<double, ETAlloc>,
+    typename STAlloc = std::allocator<size_t>,
+    typename BTAlloc = std::allocator<BucketType>
+>
+measure_stats measure_v1(
+    size_t length,
+    const value_range<double>& v_range,
+    KeyFunc key_func = {},
+    size_t desired_bucket_size = 16384,
+    double final_bucket_size_coeff = default_bucket_size_coeff,
+    ETAlloc et_alloc = {},
+    STAlloc st_alloc = {},
+    BTAlloc bt_alloc = {},
+    const parallel::schedule_t& total_length_schedule = parallel::guided_schedule{ .chunk_size = 32 },
+    const parallel::schedule_t& buckets_count_schedule = parallel::guided_schedule{ .chunk_size = 32 },
+    std::optional<size_t> num_threads = std::nullopt
+    )
 {
-    auto schedule_type = guided_schedule{ .chunk_size = 32 };
+    auto measuredf = [&]() {
+        measure_data_point dp;
 
-    auto start = std::chrono::high_resolution_clock::now();
+        auto tstart = std::chrono::high_resolution_clock::now();
 
-    auto data = allocate_data<double>(length);
-    generate_data(data, v_range, schedule_type);
-    bucket_sort_v3(std::begin(data), std::end(data), v_range);
+        // ALLOCATION
 
-    auto end = std::chrono::high_resolution_clock::now();
+        auto start = std::chrono::high_resolution_clock::now();
 
-    std::cout << (end - start).count() / 1e9 << "s" << std::endl;
+        auto data = allocate_data<double>(length, et_alloc);
 
-    auto sorted = std::is_sorted(std::begin(data), std::end(data));
-    std::cout << sorted << std::endl;
-    if (!sorted)
+        auto end = std::chrono::high_resolution_clock::now();
+        dp.allocation = std::chrono::duration_cast<millis_double>(end - start);
+
+        // GENERATION
+
+        start = std::chrono::high_resolution_clock::now();
+
+        generate_data(data, v_range, total_length_schedule);
+
+        end = std::chrono::high_resolution_clock::now();
+        dp.generation = std::chrono::duration_cast<millis_double>(end - start);
+
+        // SORTING
+
+        dp.bucket_sort_stats = bucket_sort_v1<typename decltype(data)::iterator, KeyFunc, ETAlloc, STAlloc, BucketType>(
+            std::begin(data),
+            std::end(data),
+            v_range.transform(key_func),
+            key_func,
+            desired_bucket_size,
+            final_bucket_size_coeff,
+            et_alloc,
+            st_alloc,
+            bt_alloc,
+            num_threads
+            );
+
+        auto tend = std::chrono::high_resolution_clock::now();
+
+        dp.total = std::chrono::duration_cast<millis_double>(tend - tstart);
+
+        return dp;
+    };
+
+    auto data_points = repeat(measuredf, 10);
+
+    return stats(data_points);
+}
+
+template<
+    typename KeyFunc = identity_key<double>,
+    typename ETAlloc = std::allocator<double>,
+    typename BucketType = threadsafe::lockfree_fixed_size_bucket_t<double, ETAlloc>,
+    typename STAlloc = std::allocator<size_t>,
+    typename BTAlloc = std::allocator<BucketType>
+>
+auto measure_v2(
+    size_t length,
+    const value_range<double>& v_range,
+    KeyFunc key_func = {},
+    size_t desired_bucket_size = 16384,
+    double final_bucket_size_coeff = default_bucket_size_coeff,
+    ETAlloc et_alloc = {},
+    STAlloc st_alloc = {},
+    BTAlloc bt_alloc = {},
+    const parallel::schedule_t& total_length_schedule = parallel::guided_schedule{ .chunk_size = 32 },
+    const parallel::schedule_t& buckets_count_schedule = parallel::guided_schedule{ .chunk_size = 32 },
+    std::optional<size_t> num_threads = std::nullopt
+)
+{
+    auto measuredf = [&]() {
+        measure_data_point dp;
+
+        auto tstart = std::chrono::high_resolution_clock::now();
+
+        // ALLOCATION
+
+        auto start = std::chrono::high_resolution_clock::now();
+
+        auto data = allocate_data<double>(length, et_alloc);
+
+        auto end = std::chrono::high_resolution_clock::now();
+        dp.allocation = std::chrono::duration_cast<millis_double>(end - start);
+
+        // GENERATION
+
+        start = std::chrono::high_resolution_clock::now();
+
+        generate_data(data, v_range, total_length_schedule);
+
+        end = std::chrono::high_resolution_clock::now();
+        dp.generation = std::chrono::duration_cast<millis_double>(end - start);
+
+        // SORTING
+
+        dp.bucket_sort_stats = bucket_sort_v2<typename decltype(data)::iterator, KeyFunc, ETAlloc, STAlloc, BucketType>(
+            std::begin(data),
+            std::end(data),
+            v_range.transform(key_func),
+            key_func,
+            desired_bucket_size,
+            final_bucket_size_coeff,
+            et_alloc,
+            st_alloc,
+            bt_alloc,
+            total_length_schedule,
+            buckets_count_schedule,
+            num_threads
+            );
+
+        auto tend = std::chrono::high_resolution_clock::now();
+
+        dp.total = std::chrono::duration_cast<millis_double>(tend - tstart);
+
+        return dp;
+    };
+
+    auto data_points = repeat(measuredf, 10);
+
+    return stats(data_points);
+}
+
+template<
+    typename KeyFunc = identity_key<double>,
+    typename ETAlloc = std::allocator<double>,
+    typename BucketType = variable_size_bucket_t<double, ETAlloc>,
+    typename STAlloc = std::allocator<size_t>,
+    typename BTAlloc = std::allocator<BucketType>
+>
+auto measure_v3(
+    size_t length,
+    const value_range<double>& v_range,
+    KeyFunc key_func = {},
+    size_t desired_bucket_size = 16384,
+    double final_bucket_size_coeff = default_bucket_size_coeff,
+    ETAlloc et_alloc = {},
+    STAlloc st_alloc = {},
+    BTAlloc bt_alloc = {},
+    const parallel::schedule_t& total_length_schedule = parallel::guided_schedule{ .chunk_size = 32 },
+    const parallel::schedule_t& buckets_count_schedule = parallel::guided_schedule{ .chunk_size = 32 },
+    std::optional<size_t> num_threads = std::nullopt
+)
+{
+    auto measuredf = [&]() {
+        measure_data_point dp;
+
+        auto tstart = std::chrono::high_resolution_clock::now();
+
+        // ALLOCATION
+
+        auto start = std::chrono::high_resolution_clock::now();
+
+        auto data = allocate_data<double>(length, et_alloc);
+
+        auto end = std::chrono::high_resolution_clock::now();
+        dp.allocation = std::chrono::duration_cast<millis_double>(end - start);
+
+        // GENERATION
+
+        start = std::chrono::high_resolution_clock::now();
+
+        generate_data(data, v_range, total_length_schedule);
+
+        end = std::chrono::high_resolution_clock::now();
+        dp.generation = std::chrono::duration_cast<millis_double>(end - start);
+
+        // SORTING
+
+        dp.bucket_sort_stats = bucket_sort_v3<typename decltype(data)::iterator, KeyFunc, ETAlloc, STAlloc, BucketType>(
+            std::begin(data),
+            std::end(data),
+            v_range.transform(key_func),
+            key_func,
+            desired_bucket_size,
+            final_bucket_size_coeff,
+            et_alloc,
+            st_alloc,
+            bt_alloc,
+            total_length_schedule,
+            buckets_count_schedule,
+            num_threads
+            );
+
+        auto tend = std::chrono::high_resolution_clock::now();
+
+        dp.total = std::chrono::duration_cast<millis_double>(tend - tstart);
+
+        return dp;
+    };
+
+    auto data_points = repeat(measuredf, 10);
+
+    return stats(data_points);
+}
+
+constexpr size_t lengths[] =
+{
+    1 << 16,
+    1 << 18,
+    1 << 20,
+    1 << 22,
+    1 << 24,
+    1 << 26,
+    1 << 28,
+};
+
+constexpr size_t desired_bucket_sizes[] =
+{
+    1 << 4,
+    1 << 8,
+    1 << 12,
+    1 << 16,
+};
+
+constexpr double final_bucket_size_coeffs[] =
+{
+    1.5f,
+    2.0f,
+    3.0f,
+};
+
+constexpr size_t num_threads[] =
+{
+    1,
+    2,
+    4,
+    8,
+    16,
+    32,
+    64,
+};
+
+constexpr parallel::schedule_t total_length_schedule_types[] =
+{
+    guided_schedule{.chunk_size = 32},
+    guided_schedule{.chunk_size = 64},
+    guided_schedule{.chunk_size = 128},
+};
+
+constexpr parallel::schedule_t buckets_count_schedule_types[] =
+{
+    guided_schedule{.chunk_size = 4},
+    guided_schedule{.chunk_size = 8},
+    guided_schedule{.chunk_size = 16},
+};
+
+template<template<typename, typename> typename BucketType, typename F>
+void call_direct_memcpy(F&& f, size_t length)
+{
+    std::forward<F>(f)(std::allocator<double>{}, std::allocator<size_t>{}, std::allocator<BucketType<double, std::allocator<double>>>{});
+}
+
+template<template<typename, typename> typename BucketType, typename F>
+void call_disjoint_prealloc(F&& f, size_t length)
+{
+    std::pmr::monotonic_buffer_resource bufferet{ length };
+    std::pmr::synchronized_pool_resource syncet{ &bufferet };
+    std::pmr::polymorphic_allocator<double> etalloc{ &syncet };
+
+    std::pmr::monotonic_buffer_resource bufferst{ length };
+    std::pmr::synchronized_pool_resource syncst{ &bufferst };
+    std::pmr::polymorphic_allocator<size_t> stalloc{ &syncst };
+
+    std::pmr::monotonic_buffer_resource bufferbt{ length };
+    std::pmr::synchronized_pool_resource syncbt{ &bufferbt };
+    std::pmr::polymorphic_allocator<BucketType<double, std::pmr::polymorphic_allocator<double>>> btalloc{ &syncbt };
+
+    std::forward<F>(f)(etalloc, stalloc, btalloc);
+}
+
+template<template<typename, typename> typename BucketType, typename F>
+void call_joint_prealloc(F&& f, size_t length)
+{
+    std::pmr::monotonic_buffer_resource buffer{ length * 3 };
+    std::pmr::synchronized_pool_resource sync{ &buffer };
+
+    std::pmr::polymorphic_allocator<double> etalloc{ &sync };
+    std::pmr::polymorphic_allocator<size_t> stalloc{ &sync };
+    std::pmr::polymorphic_allocator<BucketType<double, std::pmr::polymorphic_allocator<double>>> btalloc{ &sync };
+
+    std::forward<F>(f)(etalloc, stalloc, btalloc);
+}
+
+constexpr std::string_view allocation_presets[]
+{
+    "direct mempcy",
+    "disjoint prealloc",
+    "joint prealloc"
+};
+
+constexpr auto v_range = value_range<double>{ 0.0f, 1.0f };
+constexpr auto key_func = identity_key<>{};
+
+void column_labels(std::ostream& os)
+{
+    os
+        << std::setw(32) << "length" << ", "
+        << std::setw(32) << "num_threads" << ", "
+        << std::setw(32) << "desired bucket size" << ", "
+        << std::setw(32) << "final bucket size coeff" << ", "
+        << std::setw(32) << "total length schedule" << ", "
+        << std::setw(32) << "buckets count schedule" << ", "
+        << std::setw(32) << "allocation preset" << ", "
+        << std::setw(32) << "algorithm version" << ", "
+        << std::setw(32) << "bucket type" << ", "
+        << std::setw(32) << "time allocation (mean)" << ", "
+        << std::setw(32) << "time allocation (std)" << ", "
+        << std::setw(32) << "time generation (mean)" << ", "
+        << std::setw(32) << "time generation (std)" << ", "
+        << std::setw(32) << "time bucketization (mean)" << ", "
+        << std::setw(32) << "time bucketization (std)" << ", "
+        << std::setw(32) << "time sequential sorting (mean)" << ", "
+        << std::setw(32) << "time sequential sorting (std)" << ", "
+        << std::setw(32) << "time writing back (mean)" << ", "
+        << std::setw(32) << "time writing back (std)" << ", "
+        << std::setw(32) << "time concatenation (mean)" << ", "
+        << std::setw(32) << "time concatenation (std)" << ", "
+        << std::setw(32) << "time total sort (mean)" << ", "
+        << std::setw(32) << "time total sort (std)" << ", "
+        << std::setw(32) << "time total (mean)" << ", "
+        << std::setw(32) << "time total (std)"
+        << std::endl;
+}
+
+void column_values(std::ostream& os,
+    size_t length, size_t num_threads,
+    size_t desired_bucket_size, double final_bucket_size_coeff,
+    parallel::schedule_t tlscht, parallel::schedule_t bcscht,
+    std::string_view allocation_preset, size_t algorithm_version,
+    std::string_view bucket_type,
+    measure_stats mstats)
+{
+    os
+        << std::setw(32) << length << ", "
+        << std::setw(32) << num_threads << ", "
+        << std::setw(32) << desired_bucket_size << ", "
+        << std::setw(32) << final_bucket_size_coeff << ", "
+        << std::setw(32) << tlscht << ", "
+        << std::setw(32) << bcscht << ", "
+        << std::setw(32) << allocation_preset << ", "
+        << std::setw(32) << algorithm_version << ", "
+        << std::setw(32) << bucket_type << ", "
+        << std::setw(32) << mstats.allocation.mean.count() << ", "
+        << std::setw(32) << mstats.allocation.stddev.count() << ", "
+        << std::setw(32) << mstats.generation.mean.count() << ", "
+        << std::setw(32) << mstats.generation.stddev.count() << ", "
+        << std::setw(32) << mstats.bucket_sort_stats.bucketization.mean.count() << ", "
+        << std::setw(32) << mstats.bucket_sort_stats.bucketization.stddev.count() << ", "
+        << std::setw(32) << mstats.bucket_sort_stats.sequential_sorting.mean.count() << ", "
+        << std::setw(32) << mstats.bucket_sort_stats.sequential_sorting.stddev.count() << ", "
+        << std::setw(32) << mstats.bucket_sort_stats.writing_back.mean.count() << ", "
+        << std::setw(32) << mstats.bucket_sort_stats.writing_back.stddev.count() << ", "
+        << std::setw(32) << mstats.bucket_sort_stats.concatenation.mean.count() << ", "
+        << std::setw(32) << mstats.bucket_sort_stats.concatenation.stddev.count() << ", "
+        << std::setw(32) << mstats.bucket_sort_stats.total.mean.count() << ", "
+        << std::setw(32) << mstats.bucket_sort_stats.total.stddev.count() << ", "
+        << std::setw(32) << mstats.total.mean.count() << ", "
+        << std::setw(32) << mstats.total.stddev.count()
+        << std::endl;
+}
+
+template<typename T, typename TAlloc>
+using lockfull_bucket_t = threadsafe::thread_safe_bucket_t<T, TAlloc, variable_size_bucket_t<T, TAlloc>>;
+template<typename T, typename TAlloc>
+using variable_bucket_t = variable_size_bucket_t<T, TAlloc>;
+template<typename T, typename TAlloc>
+using lockfree_bucket_t = threadsafe::lockfree_fixed_size_bucket_t<T, TAlloc>;
+
+void measure_all(
+    std::ostream& os,
+    size_t length, size_t num_threads,
+    size_t desired_bucket_size, double final_bucket_size_coeff,
+    parallel::schedule_t tlscht, parallel::schedule_t bcscht
+)
+{
+    for (size_t i = 0; i < std::size(allocation_presets); i++)
     {
-        auto it = unsorted_index(std::begin(data), std::end(data));
-        std::cout << (it - std::begin(data)) << std::endl;
-        for (auto first = it - 10; first != it + 10; first++)
+        switch (i)
         {
-            std::cout << *first << ", ";
+        default:
+        case 0:
+            call_direct_memcpy<variable_bucket_t>(
+                [&]<typename ETAlloc, typename STAlloc, typename BTAlloc>(ETAlloc etalloc, STAlloc stalloc, BTAlloc btalloc)
+                {
+                    auto res = measure_v1<decltype(key_func), ETAlloc, variable_bucket_t<double, ETAlloc>, STAlloc, BTAlloc>(length, v_range, key_func, desired_bucket_size, final_bucket_size_coeff, etalloc, stalloc, btalloc, tlscht, bcscht, num_threads);
+                    column_values(os, length, num_threads, desired_bucket_size, final_bucket_size_coeff, tlscht, bcscht, allocation_presets[i], 1, "variable size", res);
+                }, length);
+            if(final_bucket_size_coeff >= 3.0f)
+            {
+                call_direct_memcpy<lockfree_bucket_t>(
+                    [&]<typename ETAlloc, typename STAlloc, typename BTAlloc>(ETAlloc etalloc, STAlloc stalloc, BTAlloc btalloc)
+                    {
+                        auto res = measure_v2<decltype(key_func), ETAlloc, lockfree_bucket_t<double, ETAlloc>, STAlloc, BTAlloc>(length, v_range, key_func, desired_bucket_size, final_bucket_size_coeff, etalloc, stalloc, btalloc, tlscht, bcscht, num_threads);
+                        column_values(os, length, num_threads, desired_bucket_size, final_bucket_size_coeff, tlscht, bcscht, allocation_presets[i], 2, "fixed size (lockfree)", res);
+                    }, length);
+            }
+            call_direct_memcpy<lockfull_bucket_t>(
+                [&]<typename ETAlloc, typename STAlloc, typename BTAlloc>(ETAlloc etalloc, STAlloc stalloc, BTAlloc btalloc)
+                {
+                    auto res = measure_v2<decltype(key_func), ETAlloc, lockfull_bucket_t<double, ETAlloc>, STAlloc, BTAlloc>(length, v_range, key_func, desired_bucket_size, final_bucket_size_coeff, etalloc, stalloc, btalloc, tlscht, bcscht, num_threads);
+                    column_values(os, length, num_threads, desired_bucket_size, final_bucket_size_coeff, tlscht, bcscht, allocation_presets[i], 2, "variable size (lockfull)", res);
+                }, length);
+            call_direct_memcpy<variable_bucket_t>(
+                [&]<typename ETAlloc, typename STAlloc, typename BTAlloc>(ETAlloc etalloc, STAlloc stalloc, BTAlloc btalloc)
+                {
+                    auto res = measure_v3<decltype(key_func), ETAlloc, variable_bucket_t<double, ETAlloc>, STAlloc, BTAlloc>(length, v_range, key_func, desired_bucket_size, final_bucket_size_coeff, etalloc, stalloc, btalloc, tlscht, bcscht, num_threads);
+                    column_values(os, length, num_threads, desired_bucket_size, final_bucket_size_coeff, tlscht, bcscht, allocation_presets[i], 3, "variable size", res);
+                }, length);
+            break;
+        case 1:
+            call_disjoint_prealloc<variable_bucket_t>(
+                [&]<typename ETAlloc, typename STAlloc, typename BTAlloc>(ETAlloc etalloc, STAlloc stalloc, BTAlloc btalloc)
+                {
+                    auto res = measure_v1<decltype(key_func), ETAlloc, variable_bucket_t<double, ETAlloc>, STAlloc, BTAlloc>(length, v_range, key_func, desired_bucket_size, final_bucket_size_coeff, etalloc, stalloc, btalloc, tlscht, bcscht, num_threads);
+                    column_values(os, length, num_threads, desired_bucket_size, final_bucket_size_coeff, tlscht, bcscht, allocation_presets[i], 1, "variable size", res);
+                }, length);
+            if(final_bucket_size_coeff >= 3.0f)
+            {
+                call_disjoint_prealloc<lockfree_bucket_t>(
+                    [&]<typename ETAlloc, typename STAlloc, typename BTAlloc>(ETAlloc etalloc, STAlloc stalloc, BTAlloc btalloc)
+                    {
+                        auto res = measure_v2<decltype(key_func), ETAlloc, lockfree_bucket_t<double, ETAlloc>, STAlloc, BTAlloc>(length, v_range, key_func, desired_bucket_size, final_bucket_size_coeff, etalloc, stalloc, btalloc, tlscht, bcscht, num_threads);
+                        column_values(os, length, num_threads, desired_bucket_size, final_bucket_size_coeff, tlscht, bcscht, allocation_presets[i], 2, "fixed size (lockfree)", res);
+                    }, length);
+            }
+            call_disjoint_prealloc<lockfull_bucket_t>(
+                [&]<typename ETAlloc, typename STAlloc, typename BTAlloc>(ETAlloc etalloc, STAlloc stalloc, BTAlloc btalloc)
+                {
+                    auto res = measure_v2<decltype(key_func), ETAlloc, lockfull_bucket_t<double, ETAlloc>, STAlloc, BTAlloc>(length, v_range, key_func, desired_bucket_size, final_bucket_size_coeff, etalloc, stalloc, btalloc, tlscht, bcscht, num_threads);
+                    column_values(os, length, num_threads, desired_bucket_size, final_bucket_size_coeff, tlscht, bcscht, allocation_presets[i], 2, "variable size (lockfull)", res);
+                }, length);
+            call_disjoint_prealloc<variable_bucket_t>(
+                [&]<typename ETAlloc, typename STAlloc, typename BTAlloc>(ETAlloc etalloc, STAlloc stalloc, BTAlloc btalloc)
+                {
+                    auto res = measure_v3<decltype(key_func), ETAlloc, variable_bucket_t<double, ETAlloc>, STAlloc, BTAlloc>(length, v_range, key_func, desired_bucket_size, final_bucket_size_coeff, etalloc, stalloc, btalloc, tlscht, bcscht, num_threads);
+                    column_values(os, length, num_threads, desired_bucket_size, final_bucket_size_coeff, tlscht, bcscht, allocation_presets[i], 3, "variable size", res);
+                }, length);
+            break;
+        case 2:
+            call_joint_prealloc<variable_bucket_t>(
+                [&]<typename ETAlloc, typename STAlloc, typename BTAlloc>(ETAlloc etalloc, STAlloc stalloc, BTAlloc btalloc)
+                {
+                    auto res = measure_v1<decltype(key_func), ETAlloc, variable_bucket_t<double, ETAlloc>, STAlloc, BTAlloc>(length, v_range, key_func, desired_bucket_size, final_bucket_size_coeff, etalloc, stalloc, btalloc, tlscht, bcscht, num_threads);
+                    column_values(os, length, num_threads, desired_bucket_size, final_bucket_size_coeff, tlscht, bcscht, allocation_presets[i], 1, "variable size", res);
+                }, length);
+            if(final_bucket_size_coeff >= 3.0f)
+            {
+                call_joint_prealloc<lockfree_bucket_t>(
+                    [&]<typename ETAlloc, typename STAlloc, typename BTAlloc>(ETAlloc etalloc, STAlloc stalloc, BTAlloc btalloc)
+                    {
+                        auto res = measure_v2<decltype(key_func), ETAlloc, lockfree_bucket_t<double, ETAlloc>, STAlloc, BTAlloc>(length, v_range, key_func, desired_bucket_size, final_bucket_size_coeff, etalloc, stalloc, btalloc, tlscht, bcscht, num_threads);
+                        column_values(os, length, num_threads, desired_bucket_size, final_bucket_size_coeff, tlscht, bcscht, allocation_presets[i], 2, "fixed size (lockfree)", res);
+                    }, length);
+            }
+            call_joint_prealloc<lockfull_bucket_t>(
+                [&]<typename ETAlloc, typename STAlloc, typename BTAlloc>(ETAlloc etalloc, STAlloc stalloc, BTAlloc btalloc)
+                {
+                    auto res = measure_v2<decltype(key_func), ETAlloc, lockfull_bucket_t<double, ETAlloc>, STAlloc, BTAlloc>(length, v_range, key_func, desired_bucket_size, final_bucket_size_coeff, etalloc, stalloc, btalloc, tlscht, bcscht, num_threads);
+                    column_values(os, length, num_threads, desired_bucket_size, final_bucket_size_coeff, tlscht, bcscht, allocation_presets[i], 2, "variable size (lockfull)", res);
+                }, length);
+            call_joint_prealloc<variable_bucket_t>(
+                [&]<typename ETAlloc, typename STAlloc, typename BTAlloc>(ETAlloc etalloc, STAlloc stalloc, BTAlloc btalloc)
+                {
+                    auto res = measure_v3<decltype(key_func), ETAlloc, variable_bucket_t<double, ETAlloc>, STAlloc, BTAlloc>(length, v_range, key_func, desired_bucket_size, final_bucket_size_coeff, etalloc, stalloc, btalloc, tlscht, bcscht, num_threads);
+                    column_values(os, length, num_threads, desired_bucket_size, final_bucket_size_coeff, tlscht, bcscht, allocation_presets[i], 3, "variable size", res);
+                }, length);
+            break;
         }
     }
 }
 
 int main(int argc, char* argv[])
 {
-    omp_set_num_threads(16);
+    using namespace parallel;
 
-    auto length = 10000000;
-    auto v_range = value_range<double>{0.0f, 1.0f};
-    
-    measure_v1(length, v_range);
-    measure_v2(length, v_range);
-    measure_v3(length, v_range);
+    omp_set_num_threads(16);
+    std::ofstream f;
+    f.open("D:/Users/MichalKotula/Desktop/MPR/zad4/out.csv");
+    if (!f.is_open())
+        return 0;
+
+    std::ostream& os = f;
+
+    column_labels(os);
+
+    for (auto length : lengths)
+    {
+        std::cout << length << std::endl;
+        for (auto nt : num_threads)
+            for (auto desired_bucket_size : desired_bucket_sizes)
+                for (auto final_bucket_size_coeff : final_bucket_size_coeffs)
+                    for (auto tlscht : total_length_schedule_types)
+                        for (auto bcscht : buckets_count_schedule_types)
+                            measure_all(os, length, nt, desired_bucket_size, final_bucket_size_coeff, tlscht, bcscht);
+    }
 
     return 0;
 }

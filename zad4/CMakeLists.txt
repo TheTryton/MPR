@@ -10,7 +10,6 @@ add_executable(lab4
         parallel_primitives.cpp
 
         parallel_for.hpp
-        parallel_for.cpp
 
         parallel_max.hpp
        
@@ -24,8 +23,6 @@ add_executable(lab4
         bucket_sort.hpp
 
         time_it.hpp
-
-        test_parameters.hpp
 
         main.cpp
         )

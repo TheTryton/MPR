@@ -13,16 +13,43 @@ def booleator(col):
 
 
 if __name__ == "__main__":
-    df = pd.read_csv('out.csv', sep='\s*,\s*',
+    unfiltered = pd.read_csv('out.csv', sep='\s*,\s*',
                      converters={'roughness': booleator, 'unstab': booleator},
                      engine='python')
-    df = df.rename(columns={
-        "Problem Size": "size",
-        "Schedule Type": "schedule",
-        "Thread Count": "thread_count",
-        "Time Taken (Mean) [s]": "mean",
-        "Time Taken STD [s]": "std"
-    })
+
+    lengths = unfiltered['length'].unique()
+    dbsizes = unfiltered['desired bucket size'].unique()
+    fbcoeffs = unfiltered['final bucket size coeff'].unique()
+    apresets = unfiltered['allocation preset'].unique()
+    version_bucket_types = unfiltered[['algorithm version', 'bucket type']].drop_duplicates()
+    num_threads = unfiltered['num_threads'].unique()
+
+    for length in lengths:
+        flength = unfiltered[unfiltered['length'] == length]
+        for dbsize in dbsizes:
+            fdbsize = flength[flength['desired bucket size'] == dbsize]
+            for fbcoeff in fbcoeffs:
+                ffbcoeff = fdbsize[fdbsize['final bucket size coeff'] == fbcoeff]
+                for apreset in apresets:
+                    fapreset = ffbcoeff[ffbcoeff['allocation preset'] == apreset]
+                    for _, vbt in version_bucket_types.iterrows():
+                        fvbt = fapreset[fapreset[['algorithm version', 'bucket type']].apply(tuple, 1) == tuple(vbt)]
+                        x = num_threads
+                        y = list(fvbt['time (mean)'])
+                        yerr = list(fvbt['time (std)'])
+                        if len(x) != len(y):
+                            continue
+                        plt.errorbar(x, y, yerr, label=str(tuple(vbt)))
+                    plt.title(f'Length={length},'
+                              f' desired bucket size={dbsize},\n'
+                              f' final bucket size coeff={fbcoeff},'
+                              f' allocation preset={apreset}')
+                    plt.ylabel('time taken [ms]')
+                    plt.xlabel('thread count')
+                    plt.legend()
+                    plt.savefig(f'time_l_{length}_dbs_{dbsize}_fbc_{fbcoeff}_ap_{apreset}.png', dpi=100)
+
+    exit()
 
     schedule_types = df['schedule'].unique()
     thread_counts = df['thread_count'].unique()

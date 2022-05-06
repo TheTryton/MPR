@@ -5,8 +5,25 @@
 
 #include <value_range.hpp>
 
-template<typename BucketsType, typename ElementType, typename ElementAllocator, typename BucketType, typename BucketAllocator>
-concept Buckets = requires(BucketsType buckets, ElementType element, typename BucketType::size_type n)
+template<typename KeyType>
+concept BucketsKey =
+#ifdef _MSC_VER
+true;
+#else
+RangeBoundary<KeyType>&&
+requires(KeyType key)
+{
+    { std::round(key) } -> std::convertible_to<KeyType>;
+    { key } -> std::convertible_to<size_t>;
+};
+#endif
+
+template<typename BucketsType, typename ElementType, typename KeyFunc, typename ElementAllocator, typename BucketType, typename BucketAllocator>
+concept Buckets =
+#ifdef _MSC_VER
+true;
+#else
+requires(BucketsType buckets, ElementType element, typename BucketType::size_type n)
 {
     typename BucketsType::size_type;
 
@@ -15,6 +32,7 @@ concept Buckets = requires(BucketsType buckets, ElementType element, typename Bu
         typename BucketsType::size_type,
         typename BucketsType::size_type,
         value_range<ElementType>,
+        KeyFunc,
         ElementAllocator,
         BucketAllocator>;
 
@@ -42,13 +60,64 @@ concept Buckets = requires(BucketsType buckets, ElementType element, typename Bu
     { buckets.insert(element) };
     { buckets.insert(std::move(element)) };
 };
+#endif
 
+template<typename ElementType = void>
+struct identity_key
+{
+    constexpr ElementType operator()(const ElementType& v) const noexcept
+    {
+        return v;
+    }
+};
+
+template<>
+struct identity_key<void>
+{
+    template<typename ElementType>
+    constexpr ElementType operator()(const ElementType& v) const noexcept
+    {
+        return v;
+    }
+};
+
+template<typename ElementType = void>
+struct reverse_key
+{
+    constexpr ElementType operator()(const ElementType& v) const noexcept
+    {
+        return -v;
+    }
+};
+
+template<>
+struct reverse_key<void>
+{
+    template<typename ElementType>
+    constexpr ElementType operator()(const ElementType& v) const noexcept
+    {
+        return -v;
+    }
+};
+
+#ifdef _MSC_VER
 template<
     typename ElementType,
+    typename KeyFunc = identity_key<ElementType>,
+    typename ElementAllocator = std::allocator<ElementType>,
+    typename BucketType = fixed_size_bucket_t<ElementType, ElementAllocator>,
+    typename BucketAllocator = std::allocator<BucketType>
+>
+#else
+template<
+    typename ElementType,
+    std::invocable<const ElementType&> KeyFunc = identity_key<ElementType>,
     Allocator<ElementType> ElementAllocator = std::allocator<ElementType>,
     Bucket<ElementType, ElementAllocator> BucketType = fixed_size_bucket_t<ElementType, ElementAllocator>,
     Allocator<BucketType> BucketAllocator = std::allocator<BucketType>
     >
+requires BucketsKey<std::invoke_result_t<KeyFunc, const ElementType&>>
+#endif
 class buckets_t
 {
 public:
@@ -58,6 +127,7 @@ public:
     using bucket_allocator_t = BucketAllocator;
 public:
     using value_type = bucket_type;
+    using key_type = std::invoke_result_t<KeyFunc, const ElementType&>;
     using reference = value_type&;
     using const_reference = const value_type&;
 
@@ -67,15 +137,19 @@ public:
     using size_type = typename fixed_size_dynamic_array<bucket_type, bucket_allocator_t>::size_type;
 private:
     fixed_size_dynamic_array<bucket_type, bucket_allocator_t> _buckets = {};
-    value_range<element_type> _values_range = {};
+    value_range<key_type> _values_range = {};
+    KeyFunc _key_func = {};
 public:
     constexpr buckets_t() noexcept = default;
     buckets_t(
-        size_type bucket_count, size_type bucket_size, const value_range<element_type>& inserted_values_range,
+        size_type bucket_count, size_type bucket_size,
+        const value_range<key_type>& inserted_values_range,
+        KeyFunc key_func = {},
         element_allocator_t element_allocator = {}, bucket_allocator_t bucket_allocator = {}
     )
         : _buckets(bucket_count, bucket_type{bucket_size, std::move(element_allocator)}, std::move(bucket_allocator))
         , _values_range(inserted_values_range)
+        , _key_func(key_func)
     {}
     buckets_t(const buckets_t& other) = default;
     buckets_t(buckets_t&& other) noexcept = default;
@@ -103,13 +177,13 @@ private:
     constexpr size_type select_bucket(const element_type& value) const noexcept
     {
         assert(can_accept_value(value));
-        auto coefficent01 = (value - _values_range.low) / _values_range.length();
-        return static_cast<size_t>(std::round(coefficent01 * (size() - 1)));
+        auto coefficent01 = (_key_func(value) - _values_range.low) / _values_range.length();
+        return static_cast<size_t>(std::round(coefficent01 * (size() - size_type(1))));
     }
 public:
     constexpr bool can_accept_value(const element_type& value) const noexcept
     {
-        return _values_range.contains(value);
+        return _values_range.contains(_key_func(value));
     }
     constexpr value_range<element_type> bucket_value_range(size_type bucket_index) const noexcept
     {
@@ -142,11 +216,13 @@ public:
 static_assert(Buckets<
     buckets_t<
         int,
+        identity_key<int>,
         std::allocator<int>,
         fixed_size_bucket_t<int, std::allocator<int>>,
         std::allocator<fixed_size_bucket_t<int, std::allocator<int>>>
     >,
     int,
+    identity_key<int>,
     std::allocator<int>,
     fixed_size_bucket_t<int, std::allocator<int>>,
     std::allocator<fixed_size_bucket_t<int, std::allocator<int>>>
@@ -154,11 +230,13 @@ static_assert(Buckets<
 static_assert(Buckets<
     buckets_t<
         int,
+        identity_key<int>,
         std::allocator<int>,
         variable_size_bucket_t<int, std::allocator<int>>,
         std::allocator<variable_size_bucket_t<int, std::allocator<int>>>
     >,
     int,
+    identity_key<int>,
     std::allocator<int>,
     variable_size_bucket_t<int, std::allocator<int>>,
     std::allocator<variable_size_bucket_t<int, std::allocator<int>>>
@@ -166,11 +244,13 @@ static_assert(Buckets<
 static_assert(Buckets<
     buckets_t<
         int,
+        identity_key<int>,
         std::allocator<int>,
         threadsafe::lockfree_fixed_size_bucket_t<int, std::allocator<int>>,
         std::allocator<threadsafe::lockfree_fixed_size_bucket_t<int, std::allocator<int>>>
     >,
     int,
+    identity_key<int>,
     std::allocator<int>,
     threadsafe::lockfree_fixed_size_bucket_t<int, std::allocator<int>>,
     std::allocator<threadsafe::lockfree_fixed_size_bucket_t<int, std::allocator<int>>>
@@ -178,11 +258,13 @@ static_assert(Buckets<
 static_assert(Buckets<
     buckets_t<
         int,
+        identity_key<int>,
         std::allocator<int>,
         threadsafe::thread_safe_bucket_t<int, std::allocator<int>, fixed_size_bucket_t<int, std::allocator<int>>>,
         std::allocator<threadsafe::thread_safe_bucket_t<int, std::allocator<int>, fixed_size_bucket_t<int, std::allocator<int>>>>
     >,
     int,
+    identity_key<int>,
     std::allocator<int>,
     threadsafe::thread_safe_bucket_t<int, std::allocator<int>, fixed_size_bucket_t<int, std::allocator<int>>>,
     std::allocator<threadsafe::thread_safe_bucket_t<int, std::allocator<int>, fixed_size_bucket_t<int, std::allocator<int>>>>
@@ -190,11 +272,13 @@ static_assert(Buckets<
 static_assert(Buckets<
     buckets_t<
         int,
+        identity_key<int>,
         std::allocator<int>,
         threadsafe::thread_safe_bucket_t<int, std::allocator<int>, variable_size_bucket_t<int, std::allocator<int>>>,
         std::allocator<threadsafe::thread_safe_bucket_t<int, std::allocator<int>, variable_size_bucket_t<int, std::allocator<int>>>>
     >,
     int,
+    identity_key<int>,
     std::allocator<int>,
     threadsafe::thread_safe_bucket_t<int, std::allocator<int>, variable_size_bucket_t<int, std::allocator<int>>>,
     std::allocator<threadsafe::thread_safe_bucket_t<int, std::allocator<int>, variable_size_bucket_t<int, std::allocator<int>>>>

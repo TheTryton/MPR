@@ -8,15 +8,24 @@
 #include <atomic>
 
 template<typename Alloc, typename T>
-concept Allocator = requires(Alloc& alloc, typename std::allocator_traits<Alloc>::pointer p, typename std::allocator_traits<Alloc>::size_type n)
+concept Allocator =
+#ifdef _MSC_VER
+true;
+#else
+requires(Alloc& alloc, typename std::allocator_traits<Alloc>::pointer p, typename std::allocator_traits<Alloc>::size_type n)
 {
     requires std::same_as<typename Alloc::value_type, T>;
     { alloc.allocate(n) } -> std::same_as<typename std::allocator_traits<Alloc>::pointer>;
     { alloc.deallocate(p, n) };
 };
+#endif
 
 template<typename FixedStorageType, typename ElementType, typename ElementAllocator>
-concept FixedSizeStorage = requires(FixedStorageType storage, ElementType element, ElementAllocator allocator, typename FixedStorageType::size_type capacity)
+concept FixedSizeStorage =
+#ifdef _MSC_VER
+true;
+#else
+requires(FixedStorageType storage, ElementType element, ElementAllocator allocator, typename FixedStorageType::size_type capacity)
 {
     typename FixedStorageType::size_type;
 
@@ -36,9 +45,14 @@ concept FixedSizeStorage = requires(FixedStorageType storage, ElementType elemen
     { storage.at(capacity) } -> std::convertible_to<ElementType>;
     { storage.at(capacity) = element } -> std::convertible_to<ElementType>;
 };
+#endif
 
 template<typename VariableStorageType, typename ElementType, typename ElementAllocator>
-concept VariableSizeStorage = requires(VariableStorageType storage, ElementType element, ElementAllocator allocator, typename VariableStorageType::size_type capacity)
+concept VariableSizeStorage =
+#ifdef _MSC_VER
+true;
+#else
+requires(VariableStorageType storage, ElementType element, ElementAllocator allocator, typename VariableStorageType::size_type capacity)
 {
     typename VariableStorageType::size_type;
 
@@ -60,28 +74,48 @@ concept VariableSizeStorage = requires(VariableStorageType storage, ElementType 
 
     { storage.push_back(element) };
 };
+#endif
 
 template<class VariableStorageType>
-concept HasReserveMethod = requires(VariableStorageType storage, typename VariableStorageType::size_type capacity)
+concept HasReserveMethod =
+#ifdef _MSC_VER
+true;
+#else
+requires(VariableStorageType storage, typename VariableStorageType::size_type capacity)
 {
     {storage.reserve(capacity) };
 };
+#endif
 
 template<class LockType>
-concept BasicLockable = requires(LockType lock)
+concept BasicLockable =
+#ifdef _MSC_VER
+true;
+#else
+requires(LockType lock)
 {
     { lock.lock() };
     { lock.unlock() };
 };
+#endif
 
 template<class LockType>
-concept Lockable = BasicLockable<LockType> && requires(LockType lock)
+concept Lockable =
+#ifdef _MSC_VER
+true;
+#else
+BasicLockable<LockType>&& requires(LockType lock)
 {
     { lock.try_lock() } -> std::convertible_to<bool>;
 };
+#endif
 
 template<typename BucketType, typename ElementType, typename ElementAllocator>
-concept Bucket = requires(BucketType bucket, ElementType element, ElementAllocator allocator, typename BucketType::size_type capacity)
+concept Bucket =
+#ifdef _MSC_VER
+true;
+#else
+requires(BucketType bucket, ElementType element, ElementAllocator allocator, typename BucketType::size_type capacity)
 {
     typename BucketType::size_type;
 
@@ -104,6 +138,8 @@ concept Bucket = requires(BucketType bucket, ElementType element, ElementAllocat
     { bucket.insert(element) };
     { bucket.insert(std::move(element)) };
 };
+#endif
+
 
 template<
     typename ElementType,

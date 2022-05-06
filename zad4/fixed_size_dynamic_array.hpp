@@ -2,6 +2,7 @@
 
 #include <memory>
 #include <ostream>
+#include <iterator>
 
 #include <assert.h>
 
@@ -86,6 +87,9 @@ public:
     using iterator = safe_pointer_iterator<pointer>;
     using const_iterator = safe_pointer_iterator<const_pointer>;
 #endif
+
+    using reverse_iterator = std::reverse_iterator<iterator>;
+    using const_reverse_iterator = std::reverse_iterator<const_iterator>;
 
     using size_type = std::size_t;
 private:
@@ -211,6 +215,12 @@ public:
         return { data() + size(), data() + size() };
 #endif
     }
+
+    constexpr reverse_iterator rbegin() noexcept { return reverse_iterator{end()}; }
+    constexpr const_reverse_iterator rbegin() const noexcept { return const_reverse_iterator{end()}; }
+
+    constexpr reverse_iterator rend() noexcept { return reverse_iterator{begin()}; }
+    constexpr const_reverse_iterator rend() const noexcept { return const_reverse_iterator{begin()}; }
 public:
     constexpr reference at(size_type index) noexcept { assert(index < _size); return _data[index]; }
     constexpr const_reference at(size_type index) const noexcept { assert(index < _size); return _data[index]; }
