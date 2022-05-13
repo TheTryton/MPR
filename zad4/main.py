@@ -21,6 +21,8 @@ if __name__ == "__main__":
     dbsizes = unfiltered['desired bucket size'].unique()
     fbcoeffs = unfiltered['final bucket size coeff'].unique()
     apresets = unfiltered['allocation preset'].unique()
+    tlschs = unfiltered['total length schedule'].unique()
+    bcschs = unfiltered['buckets count schedule'].unique()
     version_bucket_types = unfiltered[['algorithm version', 'bucket type']].drop_duplicates()
     num_threads = unfiltered['num_threads'].unique()
 
@@ -30,24 +32,33 @@ if __name__ == "__main__":
             fdbsize = flength[flength['desired bucket size'] == dbsize]
             for fbcoeff in fbcoeffs:
                 ffbcoeff = fdbsize[fdbsize['final bucket size coeff'] == fbcoeff]
-                for apreset in apresets:
-                    fapreset = ffbcoeff[ffbcoeff['allocation preset'] == apreset]
-                    for _, vbt in version_bucket_types.iterrows():
-                        fvbt = fapreset[fapreset[['algorithm version', 'bucket type']].apply(tuple, 1) == tuple(vbt)]
-                        x = num_threads
-                        y = list(fvbt['time (mean)'])
-                        yerr = list(fvbt['time (std)'])
-                        if len(x) != len(y):
-                            continue
-                        plt.errorbar(x, y, yerr, label=str(tuple(vbt)))
-                    plt.title(f'Length={length},'
-                              f' desired bucket size={dbsize},\n'
-                              f' final bucket size coeff={fbcoeff},'
-                              f' allocation preset={apreset}')
-                    plt.ylabel('time taken [ms]')
-                    plt.xlabel('thread count')
-                    plt.legend()
-                    plt.savefig(f'time_l_{length}_dbs_{dbsize}_fbc_{fbcoeff}_ap_{apreset}.png', dpi=100)
+                for tlsch in tlschs:
+                    ftlsch = ffbcoeff[ffbcoeff['total length schedule'] == tlsch]
+                    for bcsch in bcschs:
+                        fbcsch = ftlsch[ftlsch['buckets count schedule'] == bcsch]
+                        for apreset in apresets:
+                            fapreset = fbcsch[fbcsch['allocation preset'] == apreset]
+                            for _, vbt in version_bucket_types.iterrows():
+                                fvbt = fapreset[fapreset[['algorithm version', 'bucket type']].apply(tuple, 1) == tuple(vbt)]
+                                x = num_threads
+                                ysingle = fvbt[fvbt['num_threads'] == 1]['time total (mean)']
+                                y = [ysingle/yv for yv in list(fvbt['time total (mean)'])]
+                                yerr = list(fvbt['time total (std)'])
+                                if len(x) != len(y):
+                                    continue
+                                plt.plot(x, y, label=str(tuple(vbt)))
+                            plt.title(f'Length={length},'
+                                      f' desired bucket size={dbsize},\n'
+                                      f' final bucket size coeff={fbcoeff},'
+                                      f' total length schedule={tlsch},\n'
+                                      f' buckets count schedule={bcsch},'
+                                      f' allocation preset={apreset}')
+                            plt.ylabel('speedup')
+                            plt.xlabel('thread count')
+                            plt.legend()
+                            plt.tight_layout()
+                            plt.savefig(f'out_graphs/time_l_{length}_dbs_{dbsize}_fbc_{fbcoeff}_ap_{apreset}_tlsch_{tlsch}_bcsch_{bcsch}.png', dpi=100)
+                            plt.clf()
 
     exit()
 

@@ -366,7 +366,8 @@ auto measure_v3(
 
     auto data_points = repeat(measuredf, 10);
 
-    return stats(data_points);
+    auto s = stats(data_points);
+    return s;
 }
 
 constexpr size_t lengths[] =
@@ -376,8 +377,6 @@ constexpr size_t lengths[] =
     1 << 20,
     1 << 22,
     1 << 24,
-    1 << 26,
-    1 << 28,
 };
 
 constexpr size_t desired_bucket_sizes[] =
@@ -650,12 +649,17 @@ int main(int argc, char* argv[])
     using namespace parallel;
 
     omp_set_num_threads(16);
-    std::ofstream f;
-    f.open("D:/Users/MichalKotula/Desktop/MPR/zad4/out.csv");
-    if (!f.is_open())
-        return 0;
 
-    std::ostream& os = f;
+    auto selected_os = &std::cout;
+    std::ofstream f;
+
+    if (argc >= 2)
+    {
+        f.open(argv[1]);
+        if (f.is_open()) selected_os = &f;
+    }
+
+    std::ostream& os = *selected_os;
 
     column_labels(os);
 

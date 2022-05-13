@@ -110,7 +110,7 @@ namespace detail
 
         // create stats object
 
-        bucket_sort_measurement local_stats;
+        bucket_sort_measurement local_stats{};
 
         // extract current thread info
         auto total_thread_count = parallel::total_thread_count();
@@ -471,7 +471,7 @@ namespace detail
         const parallel::schedule_t& buckets_count_schedule
     )
     {
-        bucket_sort_measurement local_stats;
+        bucket_sort_measurement local_stats{};
 
         using ElementType = typename std::iterator_traits<IORandIt>::value_type;
 
@@ -571,11 +571,11 @@ namespace detail
         const parallel::schedule_t& buckets_count_schedule
     )
     {
-        bucket_sort_measurement local_stats;
+        bucket_sort_measurement local_stats{};
 
         // SEQUENTIAL_SORTING
 
-        auto start = std::chrono::high_resolution_clock::now();
+        auto start = std::chrono::steady_clock::now();
 
         parallel::for_region([first, bucket_offsets_first, bucket_sizes_first, &key_func](auto offset)
             {
