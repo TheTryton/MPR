@@ -1,0 +1,19 @@
+m4.large, 500M: 18.8086s, 18.4238s, 19.1839s
+m4.large, 1G: 37.0462s, 41.2653s, 38.1275s
+m4.large, 5G: 184.619s, 192.359s, 185.759s
+m4.large, 10G: 413.793s, 423.231s, 417.937s
+
+m5.xlarge, 500M: 14.6524s, 14.0271s, 15.7283s
+m5.xlarge, 1G: 30.5946s, 31.2257s, 30.8910s
+m5.xlarge, 5G: 169.001s, 172.582s, 168.231s
+m5.xlarge, 10G: 342.166s, 350.758s, 344.127s
+
+hadoop m4.large, 500M: 172.887s
+hadoop m4.large, 1G: 281.834s
+hadoop m4.large, 5G: 1159.036s
+hadoop m4.large, 10G: 2302.546s
+
+hadoop m5.xlarge, 500M: 175.463s
+hadoop m5.xlarge, 1G: 325.937s
+hadoop m5.xlarge, 5G: 1576.048s
+hadoop m5.xlarge, 10G: 3342.444s
