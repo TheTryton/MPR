@@ -2,11 +2,14 @@
 #include <fstream>
 #include <unordered_map>
 #include <vector>
-#include <execution>
 #include <chrono>
 #include <memory>
 #include <memory_resource>
 #include <filesystem>
+#include <algorithm>
+#include <numeric>
+#include <string>
+#include <string_view>
 #include <array>
 
 using namespace std;
@@ -32,7 +35,6 @@ private:
     };
     std::basic_streambuf<T, Traits>* source;
     std::unique_ptr<T[], deleter> data;
-    size_t read_requests = 0;
 private:
     static std::unique_ptr<T[], deleter> create_uninitialized(size_t buffer_size, const BufferAllocator& allocator)
     {
@@ -45,14 +47,10 @@ public:
         : source(source)
         , data(create_uninitialized(buffer_size, allocator))
     {}
-    virtual ~sequential_buffered_streambuf() override
-    {
-        cout << read_requests << endl;
-    }
+    virtual ~sequential_buffered_streambuf() override = default;
 protected:
     virtual streambuf::int_type underflow() override
     {
-        ++read_requests;
         auto count_read = source->sgetn(data.get(), data.get_deleter().size);
         if(count_read == 0)
             return Traits::eof();
@@ -208,15 +206,15 @@ constexpr size_t GBs(size_t c) noexcept
     return MBs(c) * 1024;
 }
 
-constexpr size_t operator""_GB(size_t c) noexcept
+constexpr size_t operator""_GB(unsigned long long c) noexcept
 {
     return GBs(c);
 }
-constexpr size_t operator""_MB(size_t c) noexcept
+constexpr size_t operator""_MB(unsigned long long c) noexcept
 {
     return MBs(c);
 }
-constexpr size_t operator""_KB(size_t c) noexcept
+constexpr size_t operator""_KB(unsigned long long c) noexcept
 {
     return KBs(c);
 }
@@ -266,14 +264,17 @@ void words_extract_iterative(ST& current_word, char c, SeparatorPred separator_p
     }
 }
 
+template<typename T>
+using allocator_base = std::pmr::polymorphic_allocator<T>;
+
 int main(int argc, char* argv[])
 {
     using seconds_double = std::chrono::duration<double, std::ratio<1,1>>;
-    using char_allocator_type = std::pmr::polymorphic_allocator<char>;
+    using char_allocator_type = allocator_base<char>;
     using string_type = basic_string<char, char_traits<char>, char_allocator_type>;
     using string_view_type = string_view;
-    using pair_allocator_type = pmr::polymorphic_allocator<pair<string_view , uint64_t>>;
-    using const_pair_allocator_type = pmr::polymorphic_allocator<pair<const string_type, uint64_t>>;
+    using pair_allocator_type = allocator_base<pair<string_view , uint64_t>>;
+    using const_pair_allocator_type = allocator_base<pair<const string_type, uint64_t>>;
     using unordered_map_type = unordered_map<string_type, uint64_t, hash<string_type>, std::equal_to<>, const_pair_allocator_type>;
     using vector_type = vector<pair<string_view_type, uint64_t>, pair_allocator_type>;
     using sequential_buffered_stream_type = sequential_buffered_stream<char, char_traits<char>, char_allocator_type>;
@@ -343,10 +344,6 @@ int main(int argc, char* argv[])
             });
             words_extract_iterative(current_word, publish);
 
-            auto end = chrono::high_resolution_clock::now();
-            cout << "Read + distribute: " << chrono::duration_cast<seconds_double>(end - start).count() << 's' << endl;
-            // sort words
-            start = chrono::high_resolution_clock::now();
             vector_type words(word_occurences.size(), pair_allocator);
             {
                 std::transform(std::begin(word_occurences), std::end(word_occurences), std::begin(words), [](auto&& p){
@@ -355,20 +352,20 @@ int main(int argc, char* argv[])
 
                 std::sort(std::begin(words), std::end(words), [](auto&& l, auto&& r){ return l.second>r.second; });
             }
-            end = chrono::high_resolution_clock::now();
-            cout << "Sort: " << chrono::duration_cast<seconds_double>(end - start).count() << 's' << endl;
+            auto end = chrono::high_resolution_clock::now();
+            cout << "" << chrono::duration_cast<seconds_double>(end - start).count() << 's' << endl;
 
             // print
-            std::for_each(std::begin(words), std::begin(words) + 10, [](auto&& p){
-                cout << p.first << ": " << p.second << endl;
-            });
+            //std::for_each(std::begin(words), std::begin(words) + 10, [](auto&& p){
+            //    cout << p.first << ": " << p.second << endl;
+            //});
 
-            size_t sum = 0;
-            for(auto& wp : words)
-            {
-                sum += wp.second;
-            }
-            cout << sum << endl;
+            //size_t sum = 0;
+            //for(auto& wp : words)
+            //{
+            //    sum += wp.second;
+            //}
+            //cout << sum << endl;
         }
     }
 
