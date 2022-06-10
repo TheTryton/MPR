@@ -115,6 +115,7 @@ measurements vector_add(gpu_t v, const float* a, const float* a_end, const float
     auto start = std::chrono::high_resolution_clock::now();
     throw_if_failed(cudaMemcpy(a_device.get(), a, length * sizeof(float), cudaMemcpyHostToDevice));
     throw_if_failed(cudaMemcpy(b_device.get(), b, length * sizeof(float), cudaMemcpyHostToDevice));
+    cudaDeviceSynchronize();
     auto end = std::chrono::high_resolution_clock::now();
     msrmnt.copy_in = std::chrono::duration_cast<seconds_double>(end - start);
 
@@ -123,8 +124,7 @@ measurements vector_add(gpu_t v, const float* a, const float* a_end, const float
 
     start = std::chrono::high_resolution_clock::now();
     vector_add_impl_gpu<<<grid_size, block_size>>>(a_device.get(), b_device.get(), out_device.get(), length);
-	throw_if_failed(cudaGetLastError());
-    throw_if_failed(cudaDeviceSynchronize());
+    cudaDeviceSynchronize();
     end = std::chrono::high_resolution_clock::now();
     msrmnt.calculation = std::chrono::duration_cast<seconds_double>(end - start);
 
@@ -132,6 +132,7 @@ measurements vector_add(gpu_t v, const float* a, const float* a_end, const float
 
     start = std::chrono::high_resolution_clock::now();
     throw_if_failed(cudaMemcpy(out, out_device.get(), length * sizeof(float), cudaMemcpyDeviceToHost));
+    cudaDeviceSynchronize();
     end = std::chrono::high_resolution_clock::now();
     msrmnt.copy_out = std::chrono::duration_cast<seconds_double>(end - start);
 
